@@ -1,9 +1,6 @@
 import JSZip from "jszip";
 import { createHash } from "crypto";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const SQL = require("sql.js") as { Database: new () => SqlDatabase };
-
 interface SqlDatabase {
   run(sql: string, params?: Record<string, unknown>): void;
   exec(sql: string): Array<{ columns: string[]; values: unknown[][] }>;
@@ -81,6 +78,8 @@ export interface AnkiCard {
 }
 
 export async function buildApkg(deckName: string, cards: AnkiCard[]): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const SQL = require("sql.js") as { Database: new () => SqlDatabase };
   const db = new SQL.Database();
   db.run(TEMPLATE_SQL);
 
