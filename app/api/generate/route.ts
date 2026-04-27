@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { WorkerMessageHandler } from "pdfjs-dist/legacy/build/pdf.worker.mjs";
-import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { PDFParse } from "pdf-parse";
+import pdfParse from "pdf-parse";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
-
-// Mount the worker handler on globalThis so pdfjs short-circuits its
-// _setupFakeWorkerGlobal loader and never attempts a dynamic import of
-// pdf.worker.mjs — which Turbopack can't resolve in the Node.js runtime.
-(globalThis as Record<string, unknown>).pdfjsWorker = { WorkerMessageHandler };
-GlobalWorkerOptions.workerSrc = "pdf.worker.mjs"; // must be truthy to pass the getter check
 
 const DENSITY_MODIFIERS: Record<string, string> = {
   "high-yield":
@@ -84,11 +76,8 @@ export async function POST(req: NextRequest) {
       const fileBuffer = Buffer.from(await file.arrayBuffer());
 
       try {
-        const nodeBuffer = Buffer.from(new Uint8Array(fileBuffer));
-        const parser = new PDFParse({ data: nodeBuffer });
-        const result = await parser.getText();
+        const result = await pdfParse(fileBuffer);
         documentText = result.text.trim();
-        await parser.destroy();
         if (!documentText) {
           return NextResponse.json(
             { error: "PDF appears to contain no extractable text" },
