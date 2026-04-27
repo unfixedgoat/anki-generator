@@ -19,8 +19,8 @@ const SYSTEM_PROMPT = `You are an expert Anki flashcard author. Given the text o
 - "back"        : string  — the answer or explanation side of the card
 - "card_type"   : string  — one of: "basic", "cloze", "definition", "process", "comparison"
 - "citation"    : string  — a short reference to where in the source this fact appears (e.g. "Section 3.2" or "Page 12, para 2")
-- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", or "none". Use "mermaid" when a diagram genuinely clarifies the concept. Use "quickchart" ONLY when the source text contains actual explicit numerical data worth charting (real statistics, percentages, measurements). Omit or use "none" otherwise.
-- "visual_data" : string  — Required when visual_type is "mermaid" or "quickchart". For "mermaid", provide raw Mermaid diagram syntax. For "quickchart", provide a valid Chart.js config object as a JSON string.
+- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none". Use "wikimedia" for anatomical structures, organ systems, or real-world biological entities that benefit from a textbook-accurate image (e.g. cell organelles, anatomical diagrams, molecular structures). Use "mermaid" for abstract processes, pathways, and relationships best shown as a diagram. Use "quickchart" ONLY when the source text contains actual explicit numerical data. Omit or use "none" otherwise.
+- "visual_data" : string  — Required when visual_type is set. For "wikimedia", provide a highly specific Wikipedia image search term (e.g. "Circle of Willis diagram", "Mitochondria structure", "Phospholipid bilayer"). For "mermaid", provide raw Mermaid diagram syntax. For "quickchart", provide a valid Chart.js config object as a JSON string.
 
 Rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
