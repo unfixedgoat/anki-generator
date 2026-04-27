@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Gemini request failed: ${message}` }, { status: 502 });
   }
 
-  const cards = enrichCards(rawCards);
+  const cards = await enrichCards(rawCards);
   if (cards.length === 0) {
     return NextResponse.json({ error: "No flashcards could be generated from this document" }, { status: 422 });
   }
