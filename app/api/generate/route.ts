@@ -19,8 +19,8 @@ const SYSTEM_PROMPT = `You are an expert Anki flashcard author. Given the text o
 - "back"        : string  — the answer or explanation side of the card
 - "card_type"   : string  — one of: "basic", "cloze", "definition", "process", "comparison"
 - "citation"    : string  — a short reference to where in the source this fact appears (e.g. "Section 3.2" or "Page 12, para 2")
-- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", or "none". Use "mermaid" when a diagram genuinely clarifies the concept — prefer graph/hierarchy layouts for structures and relationships, flowcharts only for true step-by-step processes, sequence diagrams for interactions. Use "quickchart" ONLY when the source text contains actual explicit numerical data worth charting (real statistics, percentages, measurements). Omit or use "none" otherwise.
-- "visual_data" : string  — Required when visual_type is "mermaid" or "quickchart". For "mermaid", provide raw Mermaid diagram syntax using the most appropriate diagram type (graph TD/LR, sequenceDiagram, classDiagram, etc.). For "quickchart", provide a valid Chart.js config object as a JSON string.
+- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", or "none". Use "mermaid" when a diagram genuinely clarifies the concept. Use "quickchart" ONLY when the source text contains actual explicit numerical data worth charting (real statistics, percentages, measurements). Omit or use "none" otherwise.
+- "visual_data" : string  — Required when visual_type is "mermaid" or "quickchart". For "mermaid", provide raw Mermaid diagram syntax. For "quickchart", provide a valid Chart.js config object as a JSON string.
 
 Rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
@@ -29,7 +29,13 @@ Rules:
 - Each "back" must be concise but complete. Write as a natural, fluid sentence or concise phrase — even for multi-part answers.
 - Do NOT use Markdown formatting, bullet points, dashes, or bold text in the "back" field. Avoid structured lists entirely.
 - NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
-- Choose the right Mermaid diagram type: use "graph" for hierarchies and structures, "flowchart" only for sequential steps with decisions, "sequenceDiagram" for interactions between components.
+- Mermaid diagram type selection:
+  • Linear chains or molecular structures (e.g. ATP, DNA) → graph LR with short, clean node labels and no verbose edge labels
+  • Hierarchies, taxonomies, classifications → graph TD with concise labels
+  • True step-by-step processes with decision points → flowchart TD
+  • Component interactions over time → sequenceDiagram
+  • Never use top-down layout for things that read naturally left-to-right
+  • Keep edge labels to 1–3 words max; omit them entirely if the arrow direction is self-evident
 - Mermaid and Chart.js syntax must be valid and self-contained.
 - If you cannot extract meaningful content, return an empty array: []`;
 
