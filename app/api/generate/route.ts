@@ -6,14 +6,15 @@ import { buildApkg } from "@/app/lib/ankiExport";
 
 const DENSITY_MODIFIERS: Record<string, string> = {
   "high-yield":
-    "Be ruthless. Extract ONLY the absolute most critical, highly-tested concepts. If the text is low-density, return as few as 1 to 5 cards. Ignore all minor details.",
+    "Extract ONLY the most critical, highly-tested concepts. Prioritize ruthlessly — skip minor details, but do not artificially limit card count. Fill the full target.",
   "comprehensive":
-    "Extract the core concepts, but also include secondary supporting details, specific enzyme names, and minor clinical correlations.",
+    "Extract core concepts plus secondary supporting details, specific names, mechanisms, and clinical correlations.",
   "granular":
-    "Extract every single testable fact, statistic, and edge-case mentioned in the text. Leave no medical or biological stone unturned.",
+    "Extract every testable fact, statistic, mechanism, and edge-case in the text. Leave nothing out.",
 };
 
-const SYSTEM_PROMPT = `You are an expert Anki flashcard author. Given the text of a document, produce a JSON array of flashcard objects. Each object must have exactly these fields:
+function buildSystemPrompt(cardTarget: number): string {
+  return `You are an expert Anki flashcard author. Given the text of a document, produce a JSON array of flashcard objects. Each object must have exactly these fields:
 
 - "front"       : string  — the question or prompt side of the card
 - "back"        : string  — the answer or explanation side of the card
@@ -24,10 +25,10 @@ const SYSTEM_PROMPT = `You are an expert Anki flashcard author. Given the text o
 
 Rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
-- Aim for 10–30 cards depending on document length.
+- Target approximately ${cardTarget} cards. This is calibrated to the document length — hit it.
 - Each "front" must be a focused, atomic question — one concept per card.
 - Each "back" must be concise but complete. Write as a natural, fluid sentence or concise phrase — even for multi-part answers.
-- Do NOT use Markdown formatting, bullet points, dashes, or bold text in the "back" field. Avoid structured lists entirely.
+- Do NOT use Markdown formatting, asterisks, bold, italics, bullet points, or dashes in either the "front" or "back" fields. Plain prose only.
 - NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
 - Mermaid diagram type selection:
   • Linear chains or molecular structures (e.g. ATP, DNA) → graph LR with short, clean node labels and no verbose edge labels
@@ -38,11 +39,32 @@ Rules:
   • Keep edge labels to 1–3 words max; omit them entirely if the arrow direction is self-evident
 - Mermaid and Chart.js syntax must be valid and self-contained.
 - If you cannot extract meaningful content, return an empty array: []`;
+}
+
+function cardTarget(text: string, density: string): number {
+  const words = text.trim().split(/\s+/).length;
+  // Base target scales with document size
+  let base: number;
+  if (words < 500)       base = 10;
+  else if (words < 2000) base = 20;
+  else if (words < 5000) base = 40;
+  else if (words < 10000) base = 70;
+  else if (words < 20000) base = 110;
+  else                   base = 150;
+
+  const multiplier = density === "high-yield" ? 0.5 : density === "granular" ? 1.4 : 1.0;
+  return Math.round(base * multiplier);
+}
+
+function stripMarkdown(text: string): string {
+  return text.replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1").replace(/_{1,3}([^_]+)_{1,3}/g, "$1");
+}
 
 function extractJson(raw: string): RawCard[] {
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error("No JSON array found in model response");
-  return JSON.parse(match[0]) as RawCard[];
+  const cards = JSON.parse(match[0]) as RawCard[];
+  return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
 function sanitizeFilename(name: string): string {
@@ -58,11 +80,13 @@ export async function POST(req: NextRequest) {
   let documentText: string;
   let deckName: string;
   let densityModifier: string;
+  let densityKey = "high-yield";
 
   try {
     const formData = await req.formData();
     const rawDensity = (formData.get("density") as string | null) ?? "high-yield";
-    densityModifier = DENSITY_MODIFIERS[rawDensity] ?? DENSITY_MODIFIERS["high-yield"];
+    densityKey = rawDensity in DENSITY_MODIFIERS ? rawDensity : "high-yield";
+    densityModifier = DENSITY_MODIFIERS[densityKey];
 
     const pastedText = (formData.get("text") as string | null)?.trim();
 
@@ -105,13 +129,14 @@ export async function POST(req: NextRequest) {
   let rawCards: RawCard[];
   try {
     const ai = new GoogleGenAI({ apiKey });
+    const target = cardTarget(documentText, densityKey);
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
         {
           role: "user",
           parts: [
-            { text: SYSTEM_PROMPT },
+            { text: buildSystemPrompt(target) },
             { text: `\n\nDENSITY INSTRUCTION: ${densityModifier}` },
             { text: `\n\n---\n\nDOCUMENT TEXT:\n\n${documentText}` },
           ],
