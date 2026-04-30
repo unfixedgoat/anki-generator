@@ -21,13 +21,18 @@ function buildVisualUrl(type: "mermaid" | "quickchart", data: string): string {
   return `https://quickchart.io/chart?c=${encodeURIComponent(data)}`;
 }
 
+const MAX_IMAGE_BYTES = 400_000; // 400 KB — keeps base64 overhead within response limits
+
 async function fetchAsDataUri(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "image/png";
     if (!contentType.startsWith("image/")) return null;
+    const contentLength = Number(res.headers.get("content-length") ?? 0);
+    if (contentLength > MAX_IMAGE_BYTES) return null;
     const buf = await res.arrayBuffer();
+    if (buf.byteLength > MAX_IMAGE_BYTES) return null;
     const b64 = Buffer.from(buf).toString("base64");
     return `data:${contentType};base64,${b64}`;
   } catch {
