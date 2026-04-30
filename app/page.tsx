@@ -17,7 +17,7 @@ export default function Home() {
         <DropZone />
 
         <p className="text-[11px] text-slate-300 tracking-widest uppercase">
-          PDF · Max 20 MB
+          PDF · Max 4 MB
         </p>
       </div>
     </main>

@@ -73,7 +73,11 @@ export default function DropZone() {
         setState("error");
         return;
       }
-      console.log("File received:", file.name);
+      if (file.size > 4 * 1024 * 1024) {
+        setErrorMsg("File exceeds the 4 MB limit. Try a smaller PDF or use Paste Text instead.");
+        setState("error");
+        return;
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("density", density);
