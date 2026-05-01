@@ -16,9 +16,6 @@ export default function Home() {
 
         <DropZone />
 
-        <p className="text-[11px] text-slate-300 tracking-widest uppercase">
-          PDF
-        </p>
       </div>
     </main>
   );
