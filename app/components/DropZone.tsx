@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
-import { extractTextFromPdf } from "@/app/lib/pdfExtract";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -78,6 +77,7 @@ export default function DropZone() {
 
       let text: string;
       try {
+        const { extractTextFromPdf } = await import("@/app/lib/pdfExtract");
         text = await extractTextFromPdf(file);
       } catch {
         setErrorMsg("Could not extract text from this PDF. Try pasting the text instead.");
