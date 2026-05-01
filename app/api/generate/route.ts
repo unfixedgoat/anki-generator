@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import pdfParse from "pdf-parse";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
 
@@ -88,40 +87,12 @@ export async function POST(req: NextRequest) {
     densityKey = rawDensity in DENSITY_MODIFIERS ? rawDensity : "high-yield";
     densityModifier = DENSITY_MODIFIERS[densityKey];
 
-    const pastedText = (formData.get("text") as string | null)?.trim();
-
-    if (pastedText) {
-      // ── Text mode: use pasted content directly ──────────────────────────
-      documentText = pastedText;
-      deckName = "pasted_text";
-    } else {
-      // ── PDF mode: parse uploaded file ───────────────────────────────────
-      const file = formData.get("file") as File | null;
-      if (!file) {
-        return NextResponse.json({ error: "No file or text provided" }, { status: 400 });
-      }
-      if (!file.name.toLowerCase().endsWith(".pdf")) {
-        return NextResponse.json({ error: "Only PDF files are accepted" }, { status: 400 });
-      }
-
-      deckName = file.name.replace(/\.pdf$/i, "");
-      const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-      try {
-        const result = await pdfParse(fileBuffer);
-        documentText = result.text.trim();
-        if (!documentText) {
-          return NextResponse.json(
-            { error: "PDF appears to contain no extractable text" },
-            { status: 422 }
-          );
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[pdf-parse] Failed to parse PDF:", message);
-        return NextResponse.json({ error: `Failed to parse PDF: ${message}` }, { status: 422 });
-      }
+    const text = (formData.get("text") as string | null)?.trim();
+    if (!text) {
+      return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
+    documentText = text;
+    deckName = (formData.get("filename") as string | null)?.replace(/\.pdf$/i, "") || "pasted_text";
   } catch {
     return NextResponse.json({ error: "Failed to read form data" }, { status: 400 });
   }

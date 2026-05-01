@@ -3,8 +3,9 @@
 import { useCallback, useRef, useState } from "react";
 import { Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
+import { extractTextFromPdf } from "@/app/lib/pdfExtract";
 
-type DropState = "idle" | "hovering" | "loading" | "success" | "error";
+type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
 
 async function submitToApi(
@@ -48,23 +49,20 @@ export default function DropZone() {
     setErrorMsg(null);
   }, []);
 
-  const handleApiResult = useCallback(
-    async (formData: FormData, label: string) => {
-      setFileName(label);
-      setErrorMsg(null);
-      setState("loading");
-      try {
-        const { blob, filename } = await submitToApi(formData);
-        triggerDownload(blob, filename);
-        setState("success");
-        setFileName(filename);
-      } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
-        setState("error");
-      }
-    },
-    []
-  );
+  const handleApiResult = useCallback(async (formData: FormData, label: string) => {
+    setFileName(label);
+    setErrorMsg(null);
+    setState("loading");
+    try {
+      const { blob, filename } = await submitToApi(formData);
+      triggerDownload(blob, filename);
+      setState("success");
+      setFileName(filename);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
+      setState("error");
+    }
+  }, []);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -73,14 +71,30 @@ export default function DropZone() {
         setState("error");
         return;
       }
-      if (file.size > 4 * 1024 * 1024) {
-        setErrorMsg("File exceeds the 4 MB limit. Try a smaller PDF or use Paste Text instead.");
+
+      setFileName(file.name);
+      setErrorMsg(null);
+      setState("extracting");
+
+      let text: string;
+      try {
+        text = await extractTextFromPdf(file);
+      } catch {
+        setErrorMsg("Could not extract text from this PDF. Try pasting the text instead.");
         setState("error");
         return;
       }
+
+      if (!text) {
+        setErrorMsg("This PDF contains no extractable text (it may be scanned). Try pasting the text instead.");
+        setState("error");
+        return;
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("text", text);
       formData.append("density", density);
+      formData.append("filename", file.name);
       await handleApiResult(formData, file.name);
     },
     [density, handleApiResult]
@@ -128,7 +142,7 @@ export default function DropZone() {
   );
 
   const openPicker = useCallback(() => {
-    if (state !== "loading") {
+    if (state !== "loading" && state !== "extracting") {
       if (inputRef.current) inputRef.current.value = "";
       inputRef.current?.click();
     }
@@ -143,12 +157,26 @@ export default function DropZone() {
   }, []);
 
   const isHovering = state === "hovering";
+  const isExtracting = state === "extracting";
   const isLoading = state === "loading";
   const isSuccess = state === "success";
   const isError = state === "error";
   const isIdle = state === "idle";
+  const isBusy = isExtracting || isLoading;
 
   // ── Shared status panels ──────────────────────────────────────────────────
+
+  const ExtractingPanel = (
+    <>
+      <Loader2 className="w-8 h-8 text-slate-400 animate-spin" strokeWidth={1.5} />
+      <div className="text-center space-y-1.5">
+        <p className="text-sm font-medium text-slate-600 tracking-wide">
+          Reading PDF…
+        </p>
+        <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
+      </div>
+    </>
+  );
 
   const LoadingPanel = (
     <>
@@ -224,13 +252,13 @@ export default function DropZone() {
         </button>
       </div>
 
-      <DensityToggle value={density} onChange={setDensity} disabled={isLoading} />
+      <DensityToggle value={density} onChange={setDensity} disabled={isBusy} />
 
       {/* ── PDF drop zone ────────────────────────────────────────────────── */}
       {inputType === "pdf" && (
         <div
           role="button"
-          tabIndex={isLoading ? -1 : 0}
+          tabIndex={isBusy ? -1 : 0}
           aria-label="Upload PDF"
           onClick={openPicker}
           onKeyDown={(e) => e.key === "Enter" && openPicker()}
@@ -244,7 +272,7 @@ export default function DropZone() {
             "focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
             isHovering
               ? "border-slate-500 bg-slate-50 scale-[1.01] cursor-copy"
-              : isLoading
+              : isBusy
               ? "border-slate-200 bg-white cursor-default pointer-events-none"
               : isSuccess
               ? "border-emerald-200 bg-emerald-50/30 cursor-pointer"
@@ -261,6 +289,7 @@ export default function DropZone() {
             onChange={onInputChange}
           />
 
+          {isExtracting && ExtractingPanel}
           {isLoading && LoadingPanel}
           {isSuccess && SuccessPanel}
           {isError && ErrorPanel}
@@ -301,7 +330,7 @@ export default function DropZone() {
           className={[
             "relative w-full h-72 rounded-2xl border overflow-hidden",
             "transition-all duration-200",
-            isLoading
+            isBusy
               ? "border-slate-200 bg-white pointer-events-none flex flex-col items-center justify-center gap-5"
               : isSuccess
               ? "border-emerald-200 bg-emerald-50/30 flex flex-col items-center justify-center gap-5"
