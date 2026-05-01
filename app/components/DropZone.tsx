@@ -79,8 +79,10 @@ export default function DropZone() {
       try {
         const { extractTextFromPdf } = await import("@/app/lib/pdfExtract");
         text = await extractTextFromPdf(file);
-      } catch {
-        setErrorMsg("Could not extract text from this PDF. Try pasting the text instead.");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[pdfExtract]", msg);
+        setErrorMsg(`Could not extract text: ${msg}`);
         setState("error");
         return;
       }
