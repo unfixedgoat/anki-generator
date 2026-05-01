@@ -3,6 +3,23 @@ import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
 
+const STYLE_MODIFIERS: Record<string, string> = {
+  "standard":
+    "Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
+  "cloze":
+    "Generate fill-in-the-blank cards. The front must be a complete sentence with the key term replaced by a blank (___). The back reveals the missing term and briefly explains it.",
+  "concise":
+    "Generate cards where the back is a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
+  "essay":
+    "Generate cards that require deep, multi-sentence answers. The front should ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back should be thorough.",
+  "mcq":
+    "Generate multiple-choice cards. The front must contain the question followed by exactly four options labeled A), B), C), D) on separate lines. The back states the correct letter, the answer text, and a one-sentence explanation of why it is correct.",
+  "solve":
+    "Generate practice problem cards. The front presents a quantitative problem with realistic values and asks to solve for one variable. The back shows the full worked solution with every step, correct units, and the final numerical answer. You may use reasonable textbook-style values if none appear in the source.",
+  "formula":
+    "Generate equation recall cards. The front asks 'What is the equation/formula for [concept]?' The back states the equation in plain text using standard notation, then defines each variable.",
+};
+
 const DENSITY_MODIFIERS: Record<string, string> = {
   "high-yield":
     "Extract ONLY the most critical, highly-tested concepts. Prioritize ruthlessly — skip minor details, but do not artificially limit card count. Fill the full target.",
@@ -81,12 +98,16 @@ export async function POST(req: NextRequest) {
   let deckName: string;
   let densityModifier: string;
   let densityKey = "high-yield";
+  let styleModifier: string = STYLE_MODIFIERS["standard"];
 
   try {
     const formData = await req.formData();
     const rawDensity = (formData.get("density") as string | null) ?? "high-yield";
     densityKey = rawDensity in DENSITY_MODIFIERS ? rawDensity : "high-yield";
     densityModifier = DENSITY_MODIFIERS[densityKey];
+
+    const rawStyle = (formData.get("style") as string | null) ?? "standard";
+    styleModifier = STYLE_MODIFIERS[rawStyle] ?? STYLE_MODIFIERS["standard"];
 
     const text = (formData.get("text") as string | null)?.trim();
     if (!text) {
@@ -109,6 +130,7 @@ export async function POST(req: NextRequest) {
           role: "user",
           parts: [
             { text: buildSystemPrompt(target) },
+            { text: `\n\nCARD STYLE INSTRUCTION: ${styleModifier}` },
             { text: `\n\nDENSITY INSTRUCTION: ${densityModifier}` },
             { text: `\n\n---\n\nDOCUMENT TEXT:\n\n${documentText}` },
           ],

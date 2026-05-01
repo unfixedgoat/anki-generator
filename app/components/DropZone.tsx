@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
+import StyleToggle, { type CardStyle } from "./StyleToggle";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -38,6 +39,7 @@ export default function DropZone() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [density, setDensity] = useState<Density>("high-yield");
+  const [cardStyle, setCardStyle] = useState<CardStyle>("standard");
   const [rawText, setRawText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -96,6 +98,7 @@ export default function DropZone() {
       const formData = new FormData();
       formData.append("text", text);
       formData.append("density", density);
+      formData.append("style", cardStyle);
       formData.append("filename", file.name);
       await handleApiResult(formData, file.name);
     },
@@ -108,6 +111,7 @@ export default function DropZone() {
     const formData = new FormData();
     formData.append("text", text);
     formData.append("density", density);
+    formData.append("style", cardStyle);
     await handleApiResult(formData, "pasted text");
   }, [rawText, density, handleApiResult]);
 
@@ -255,6 +259,7 @@ export default function DropZone() {
       </div>
 
       <DensityToggle value={density} onChange={setDensity} disabled={isBusy} />
+      <StyleToggle value={cardStyle} onChange={setCardStyle} disabled={isBusy} />
 
       {/* ── PDF drop zone ────────────────────────────────────────────────── */}
       {inputType === "pdf" && (
