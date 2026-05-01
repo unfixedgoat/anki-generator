@@ -28,6 +28,7 @@ Rules:
 - Each "front" must be a focused, atomic question — one concept per card.
 - Each "back" must be concise but complete. Write as a natural, fluid sentence or concise phrase — even for multi-part answers.
 - Do NOT use Markdown formatting, asterisks, bold, italics, bullet points, or dashes in either the "front" or "back" fields. Plain prose only.
+- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose instead (e.g. "delta G equals negative RT ln K").
 - NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
 - Mermaid diagram type selection:
   • Linear chains or molecular structures (e.g. ATP, DNA) → graph LR with short, clean node labels and no verbose edge labels
