@@ -42,19 +42,34 @@ async function fetchAsDataUri(url: string): Promise<string | null> {
 
 async function fetchWikimediaUrl(searchTerm: string): Promise<string | null> {
   try {
-    const apiUrl =
-      `https://en.wikipedia.org/w/api.php?action=query&generator=search` +
-      `&gsrsearch=${encodeURIComponent(searchTerm)}&gsrnamespace=6&gsrlimit=1` +
-      `&prop=imageinfo&iiprop=url&format=json&origin=*`;
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const data = await res.json() as {
-      query?: { pages?: Record<string, { imageinfo?: { url: string }[] }> };
+    // Search English Wikipedia articles, then fetch the primary page thumbnail.
+    // This avoids File-namespace results which are Commons images that may have
+    // non-English labels baked into the graphic.
+    const searchUrl =
+      `https://en.wikipedia.org/w/api.php?action=query&list=search` +
+      `&srsearch=${encodeURIComponent(searchTerm)}&srnamespace=0&srlimit=3` +
+      `&format=json&origin=*`;
+    const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
+    if (!searchRes.ok) return null;
+    const searchData = await searchRes.json() as {
+      query?: { search?: { title: string }[] };
     };
-    const pages = data?.query?.pages;
+    const results = searchData?.query?.search;
+    if (!results?.length) return null;
+
+    const pageTitle = results[0].title;
+    const thumbUrl =
+      `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(pageTitle)}` +
+      `&prop=pageimages&pithumbsize=800&pilicense=any&format=json&origin=*`;
+    const thumbRes = await fetch(thumbUrl, { signal: AbortSignal.timeout(8000) });
+    if (!thumbRes.ok) return null;
+    const thumbData = await thumbRes.json() as {
+      query?: { pages?: Record<string, { thumbnail?: { source: string } }> };
+    };
+    const pages = thumbData?.query?.pages;
     if (!pages) return null;
-    const firstPage = pages[Object.keys(pages)[0]];
-    return firstPage?.imageinfo?.[0]?.url ?? null;
+    const page = pages[Object.keys(pages)[0]];
+    return page?.thumbnail?.source ?? null;
   } catch {
     return null;
   }

@@ -29,7 +29,7 @@ const DENSITY_MODIFIERS: Record<string, string> = {
     "Extract every testable fact, statistic, mechanism, and edge-case in the text. Leave nothing out.",
 };
 
-function buildSystemPrompt(cardTarget: number): string {
+function buildSystemPrompt(cardTarget: number, styleModifier: string): string {
   return `You are an expert Anki flashcard author. Given the text of a document, produce a JSON array of flashcard objects. Each object must have exactly these fields:
 
 - "front"       : string  — the question or prompt side of the card
@@ -39,22 +39,23 @@ function buildSystemPrompt(cardTarget: number): string {
 - "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none". Use "wikimedia" for anatomical structures, organ systems, or real-world biological entities that benefit from a textbook-accurate image (e.g. cell organelles, anatomical diagrams, molecular structures). Use "mermaid" for abstract processes, pathways, and relationships best shown as a diagram. Use "quickchart" ONLY when the source text contains actual explicit numerical data. Omit or use "none" otherwise.
 - "visual_data" : string  — Required when visual_type is set. For "wikimedia", provide a highly specific Wikipedia image search term (e.g. "Circle of Willis diagram", "Mitochondria structure", "Phospholipid bilayer"). For "mermaid", provide raw Mermaid diagram syntax. For "quickchart", provide a valid Chart.js config object as a JSON string.
 
+CARD STYLE — follow this exactly, it overrides all other formatting rules:
+${styleModifier}
+
 Rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
 - Target approximately ${cardTarget} cards. This is calibrated to the document length — hit it.
 - Each "front" must be a focused, atomic question — one concept per card.
-- CRITICAL: The CARD STYLE INSTRUCTION that follows these rules takes strict precedence over all default formatting rules below. Where the card style requires a specific structure (multi-line answer choices, fill-in-the-blank blanks, worked solution steps, equations), you MUST use exactly that structure and ignore conflicting default rules.
-- Default formatting (apply ONLY when the card style does not specify otherwise): Each "back" should be concise but complete, written as a natural, fluid sentence or concise phrase. Do NOT use Markdown formatting, asterisks, bold, italics, bullet points, or dashes. Plain prose only.
-- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose instead (e.g. "delta G equals negative RT ln K") unless the card style instructs a different equation format.
-- Visual enrichment applies to ALL card styles without exception. Always evaluate visual_type independently of how the front/back are formatted. A chemistry card, process card, or MCQ can still have a diagram or Wikimedia image.
+- Default formatting (apply ONLY when the card style above does not specify otherwise): write "back" as a natural, fluid sentence or concise phrase. No Markdown, asterisks, bold, italics, bullet points, or dashes. Plain prose only.
+- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose (e.g. "delta G equals negative RT ln K") unless the card style above requires a specific equation format.
+- Visual enrichment applies to ALL card styles. Always evaluate visual_type independently of front/back format — an MCQ or formula card can still have a diagram or Wikimedia image.
 - NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
 - Mermaid diagram type selection:
-  • Linear chains or molecular structures (e.g. ATP, DNA) → graph LR with short, clean node labels and no verbose edge labels
+  • Linear chains or molecular structures → graph LR with short node labels, no verbose edge labels
   • Hierarchies, taxonomies, classifications → graph TD with concise labels
-  • True step-by-step processes with decision points → flowchart TD
+  • Step-by-step processes with decision points → flowchart TD
   • Component interactions over time → sequenceDiagram
-  • Never use top-down layout for things that read naturally left-to-right
-  • Keep edge labels to 1–3 words max; omit them entirely if the arrow direction is self-evident
+  • Keep edge labels to 1–3 words max; omit if arrow direction is self-evident
 - Mermaid and Chart.js syntax must be valid and self-contained.
 - If you cannot extract meaningful content, return an empty array: []`;
 }
@@ -130,8 +131,7 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           parts: [
-            { text: buildSystemPrompt(target) },
-            { text: `\n\nCARD STYLE INSTRUCTION: ${styleModifier}` },
+            { text: buildSystemPrompt(target, styleModifier) },
             { text: `\n\nDENSITY INSTRUCTION: ${densityModifier}` },
             { text: `\n\n---\n\nDOCUMENT TEXT:\n\n${documentText}` },
           ],
