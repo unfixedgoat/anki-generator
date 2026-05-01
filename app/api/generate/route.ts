@@ -5,19 +5,19 @@ import { buildApkg } from "@/app/lib/ankiExport";
 
 const STYLE_MODIFIERS: Record<string, string> = {
   "standard":
-    "Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
+    "STYLE: Standard. Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
   "cloze":
-    "Generate fill-in-the-blank cards. The front must be a complete sentence with the key term replaced by a blank (___). The back reveals the missing term and briefly explains it.",
+    "STYLE: Cloze. OVERRIDE default prose rule: the front MUST be a complete sentence with the key term replaced by ___ (three underscores). The back reveals the missing term followed by a brief one-sentence explanation. The blank ___ is required — do not write out the term on the front.",
   "concise":
-    "Generate cards where the back is a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
+    "STYLE: Concise. The back must be a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
   "essay":
-    "Generate cards that require deep, multi-sentence answers. The front should ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back should be thorough.",
+    "STYLE: Essay. Generate cards requiring deep, multi-sentence answers. The front must ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back must be thorough and multi-sentence.",
   "mcq":
-    "Generate multiple-choice cards. The front must contain the question followed by exactly four options labeled A), B), C), D) on separate lines. The back states the correct letter, the answer text, and a one-sentence explanation of why it is correct.",
+    "STYLE: Multiple Choice. OVERRIDE default prose rule: the front MUST contain the question text, then a blank line, then exactly four answer options each on its own line formatted exactly as: A) [option text], B) [option text], C) [option text], D) [option text]. The back must state the correct letter (e.g. 'B'), the full answer text, and a one-sentence explanation. Use newline characters (\\n) to separate lines within the front and back strings. Do NOT collapse the options into a single sentence.",
   "solve":
-    "Generate practice problem cards. The front presents a quantitative problem with realistic values and asks to solve for one variable. The back shows the full worked solution with every step, correct units, and the final numerical answer. You may use reasonable textbook-style values if none appear in the source.",
+    "STYLE: Solve. OVERRIDE default prose rule: the front presents a quantitative practice problem with realistic numerical values and asks to solve for one variable. The back shows the full worked solution with every step on its own line, correct units throughout, and the final numerical answer clearly stated. Use \\n to separate steps. You may use reasonable textbook-style values if the source contains none.",
   "formula":
-    "Generate equation recall cards. The front asks 'What is the equation/formula for [concept]?' The back states the equation in plain text using standard notation, then defines each variable.",
+    "STYLE: Formula. The front asks 'What is the equation for [concept]?' The back states the equation using plain-text notation (e.g. 'F = ma', 'PV = nRT'), then on the next line defines each variable. Use \\n to separate the equation from the variable definitions.",
 };
 
 const DENSITY_MODIFIERS: Record<string, string> = {
@@ -43,9 +43,9 @@ Rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
 - Target approximately ${cardTarget} cards. This is calibrated to the document length — hit it.
 - Each "front" must be a focused, atomic question — one concept per card.
-- Each "back" must be concise but complete. Write as a natural, fluid sentence or concise phrase — even for multi-part answers.
-- Do NOT use Markdown formatting, asterisks, bold, italics, bullet points, or dashes in either the "front" or "back" fields. Plain prose only.
-- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose instead (e.g. "delta G equals negative RT ln K").
+- CRITICAL: The CARD STYLE INSTRUCTION that follows these rules takes strict precedence over all default formatting rules below. Where the card style requires a specific structure (multi-line answer choices, fill-in-the-blank blanks, worked solution steps, equations), you MUST use exactly that structure and ignore conflicting default rules.
+- Default formatting (apply ONLY when the card style does not specify otherwise): Each "back" should be concise but complete, written as a natural, fluid sentence or concise phrase. Do NOT use Markdown formatting, asterisks, bold, italics, bullet points, or dashes. Plain prose only.
+- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose instead (e.g. "delta G equals negative RT ln K") unless the card style instructs a different equation format.
 - Visual enrichment applies to ALL card styles without exception. Always evaluate visual_type independently of how the front/back are formatted. A chemistry card, process card, or MCQ can still have a diagram or Wikimedia image.
 - NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
 - Mermaid diagram type selection:
