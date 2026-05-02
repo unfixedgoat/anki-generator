@@ -5,19 +5,37 @@ import { buildApkg } from "@/app/lib/ankiExport";
 
 const STYLE_MODIFIERS: Record<string, string> = {
   "standard":
-    "STYLE: Standard. Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
+    "Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
   "cloze":
-    "STYLE: Cloze. OVERRIDE default prose rule: the front MUST be a complete sentence with the key term replaced by ___ (three underscores). The back reveals the missing term followed by a brief one-sentence explanation. The blank ___ is required — do not write out the term on the front.",
+    `Generate cloze (fill-in-the-blank) cards. The front MUST be a complete sentence with the key term replaced by ___ (three underscores). The back reveals the missing term and briefly explains it. Never write the term on the front.
+Example:
+  front: "The ___ is the powerhouse of the cell."
+  back: "mitochondrion — an organelle that produces ATP via oxidative phosphorylation."`,
   "concise":
-    "STYLE: Concise. The back must be a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
+    "Generate cards where the back is a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
   "essay":
-    "STYLE: Essay. Generate cards requiring deep, multi-sentence answers. The front must ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back must be thorough and multi-sentence.",
+    "Generate cards requiring deep, multi-sentence answers. The front must ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back must be thorough and multi-sentence.",
   "mcq":
-    "STYLE: Multiple Choice. OVERRIDE default prose rule: the front MUST contain the question text, then a blank line, then exactly four answer options each on its own line formatted exactly as: A) [option text], B) [option text], C) [option text], D) [option text]. The back must state the correct letter (e.g. 'B'), the full answer text, and a one-sentence explanation. Use newline characters (\\n) to separate lines within the front and back strings. Do NOT collapse the options into a single sentence.",
+    `Generate multiple-choice cards. Every single card MUST follow this exact format — no exceptions.
+The "front" field: question text, then a newline character, then exactly four options each on its own line labeled A), B), C), D).
+The "back" field: the correct letter, the answer text, and a one-sentence explanation.
+All four options must be plausible; only one is correct.
+
+Required JSON format example:
+  "front": "Which hormone is produced in excess in Congenital Adrenal Hyperplasia?\\nA) Estrogen\\nB) Cortisol\\nC) Androgens\\nD) Insulin",
+  "back": "C) Androgens — CAH causes a cortisol synthesis defect that shunts precursors into androgen production."
+
+You MUST produce this four-option format for every card. Do NOT generate plain Q&A cards.`,
   "solve":
-    "STYLE: Solve. OVERRIDE default prose rule: the front presents a quantitative practice problem with realistic numerical values and asks to solve for one variable. The back shows the full worked solution with every step on its own line, correct units throughout, and the final numerical answer clearly stated. Use \\n to separate steps. You may use reasonable textbook-style values if the source contains none.",
+    `Generate practice problem cards. The front presents a quantitative problem with realistic values asking to solve for one variable. The back shows every step of the worked solution with units, ending with the final numerical answer.
+Example:
+  front: "A 70 kg patient receives 2 mg/kg of drug X. What is the total dose in mg?"
+  back: "Total dose = 2 mg/kg × 70 kg = 140 mg"`,
   "formula":
-    "STYLE: Formula. The front asks 'What is the equation for [concept]?' The back states the equation using plain-text notation (e.g. 'F = ma', 'PV = nRT'), then on the next line defines each variable. Use \\n to separate the equation from the variable definitions.",
+    `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
+Example:
+  front: "What is the equation for cardiac output?"
+  back: "CO = HR × SV\\nCO = cardiac output (L/min), HR = heart rate (beats/min), SV = stroke volume (mL/beat)"`,
 };
 
 const DENSITY_MODIFIERS: Record<string, string> = {
@@ -29,35 +47,27 @@ const DENSITY_MODIFIERS: Record<string, string> = {
     "Extract every testable fact, statistic, mechanism, and edge-case in the text. Leave nothing out.",
 };
 
-function buildSystemPrompt(cardTarget: number, styleModifier: string): string {
-  return `You are an expert Anki flashcard author. Given the text of a document, produce a JSON array of flashcard objects. Each object must have exactly these fields:
+function buildSystemInstruction(styleModifier: string): string {
+  return `You are an expert Anki flashcard author. Produce a JSON array of flashcard objects from the document text provided. Each object must have exactly these fields:
 
 - "front"       : string  — the question or prompt side of the card
 - "back"        : string  — the answer or explanation side of the card
 - "card_type"   : string  — one of: "basic", "cloze", "definition", "process", "comparison"
-- "citation"    : string  — a short reference to where in the source this fact appears (e.g. "Section 3.2" or "Page 12, para 2")
-- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none". Use "wikimedia" for anatomical structures, organ systems, or real-world biological entities that benefit from a textbook-accurate image (e.g. cell organelles, anatomical diagrams, molecular structures). Use "mermaid" for abstract processes, pathways, and relationships best shown as a diagram. Use "quickchart" ONLY when the source text contains actual explicit numerical data. Omit or use "none" otherwise.
-- "visual_data" : string  — Required when visual_type is set. For "wikimedia", provide a highly specific Wikipedia image search term (e.g. "Circle of Willis diagram", "Mitochondria structure", "Phospholipid bilayer"). For "mermaid", provide raw Mermaid diagram syntax. For "quickchart", provide a valid Chart.js config object as a JSON string.
+- "citation"    : string  — short reference to where in the source this fact appears (e.g. "Section 3.2")
+- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none". Use "wikimedia" for anatomical structures or real-world biological entities. Use "mermaid" for abstract processes and relationships. Use "quickchart" ONLY when the source contains actual numerical data. Omit or use "none" otherwise.
+- "visual_data" : string  — Required when visual_type is set. For "wikimedia": a specific image search term. For "mermaid": raw Mermaid syntax. For "quickchart": a Chart.js config JSON string.
 
-CARD STYLE — follow this exactly, it overrides all other formatting rules:
+CARD FORMAT — this is your primary instruction, follow it exactly:
 ${styleModifier}
 
-Rules:
-- Output ONLY a raw JSON array. No markdown fences, no commentary, no keys other than those listed.
-- Target approximately ${cardTarget} cards. This is calibrated to the document length — hit it.
-- Each "front" must be a focused, atomic question — one concept per card.
-- Default formatting (apply ONLY when the card style above does not specify otherwise): write "back" as a natural, fluid sentence or concise phrase. No Markdown, asterisks, bold, italics, bullet points, or dashes. Plain prose only.
-- Use HTML <sub> and <sup> tags for chemical formulas, ion charges, and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>, CO<sub>2</sub>). Write equations in plain prose (e.g. "delta G equals negative RT ln K") unless the card style above requires a specific equation format.
-- Visual enrichment applies to ALL card styles. Always evaluate visual_type independently of front/back format — an MCQ or formula card can still have a diagram or Wikimedia image.
-- NEVER invent numerical data for charts. Only use "quickchart" when real numbers appear in the source text.
-- Mermaid diagram type selection:
-  • Linear chains or molecular structures → graph LR with short node labels, no verbose edge labels
-  • Hierarchies, taxonomies, classifications → graph TD with concise labels
-  • Step-by-step processes with decision points → flowchart TD
-  • Component interactions over time → sequenceDiagram
-  • Keep edge labels to 1–3 words max; omit if arrow direction is self-evident
-- Mermaid and Chart.js syntax must be valid and self-contained.
-- If you cannot extract meaningful content, return an empty array: []`;
+Additional rules:
+- Output ONLY a raw JSON array. No markdown fences, no commentary, no extra keys.
+- Default formatting when the card format above does not specify: write "back" as a natural sentence or short phrase. No asterisks, bold, italics, bullet points, or dashes.
+- Use HTML <sub> and <sup> for chemical formulas and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>).
+- Visual enrichment applies to ALL card styles — evaluate visual_type independently of format.
+- NEVER invent numerical data. Only use "quickchart" when real numbers appear in the source.
+- Mermaid: linear chains → graph LR; hierarchies → graph TD; processes → flowchart TD; interactions → sequenceDiagram. Keep edge labels ≤3 words.
+- If you cannot extract meaningful content, return [].`;
 }
 
 function cardTarget(text: string, density: string): number {
@@ -127,13 +137,14 @@ export async function POST(req: NextRequest) {
     const target = cardTarget(documentText, densityKey);
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
+      systemInstruction: buildSystemInstruction(styleModifier),
       contents: [
         {
           role: "user",
           parts: [
-            { text: buildSystemPrompt(target, styleModifier) },
-            { text: `\n\nDENSITY INSTRUCTION: ${densityModifier}` },
-            { text: `\n\n---\n\nDOCUMENT TEXT:\n\n${documentText}` },
+            {
+              text: `Generate approximately ${target} flashcards from the document below.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
+            },
           ],
         },
       ],
