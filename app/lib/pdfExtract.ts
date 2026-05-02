@@ -5,7 +5,7 @@
 
 interface PdfjsLib {
   GlobalWorkerOptions: { workerSrc: string };
-  getDocument(params: { data: Uint8Array }): { promise: Promise<PdfDoc> };
+  getDocument(params: { data: Uint8Array; cMapUrl?: string; cMapPacked?: boolean }): { promise: Promise<PdfDoc> };
 }
 
 interface PdfDoc {
@@ -17,7 +17,11 @@ interface PdfPage {
   getTextContent(): Promise<{ items: Array<{ str?: string }> }>;
 }
 
-const WORKER_URL = "/pdf.worker.min.js";
+const WORKER_URL =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const CMAP_URL =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/";
 
 function getPdfjs(): PdfjsLib {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +35,11 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
 
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+  const pdf = await pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    cMapUrl: CMAP_URL,
+    cMapPacked: true,
+  }).promise;
 
   const pages: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
