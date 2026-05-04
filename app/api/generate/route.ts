@@ -27,20 +27,24 @@ Required JSON format example:
 
 You MUST produce this four-option format for every card. Do NOT generate plain Q&A cards.`,
   "solve":
-    `Generate worked practice problem cards. Every card MUST be a solvable quantitative problem — not a definition, not a concept question. You MUST invent realistic numerical values for every card even if the source document contains no numbers at all.
+    `Generate worked practice problem cards. EVERY card in the output must be a quantitative word problem with a step-by-step numerical solution. Zero exceptions. If you are about to write a definition, a concept explanation, or any card without numbers — stop and rewrite it as a calculation problem instead.
 
-Required JSON format:
-  "front": "A 70 kg patient is given 0.1 mg/kg of epinephrine. What is the total dose in mg?"
+Required JSON format — every card must match this pattern exactly:
+  "front": "A 70 kg patient is given 0.1 mg/kg of epinephrine IV. What is the total dose in mg?"
   "back": "Total dose = 0.1 mg/kg × 70 kg = 7 mg"
 
-Another example:
-  "front": "A neuron has a resting membrane potential of -70 mV. The equilibrium potential for K⁺ is -90 mV. What is the driving force on K⁺?"
-  "back": "Driving force = Vm − E_K = −70 mV − (−90 mV) = +20 mV (outward)"
+  "front": "A reaction has ΔH = −50 kJ/mol and ΔS = −150 J/mol·K. What is the crossover temperature in Kelvin?"
+  "back": "Tcrossover = ΔH / ΔS\\nConvert ΔH: −50 kJ/mol = −50,000 J/mol\\nTcrossover = −50,000 / −150 = 333 K"
 
-Rules for every solve card:
-- Front: a word problem with invented but realistic numbers, asking to solve for one unknown
-- Back: step-by-step solution with units at each step, final numerical answer on the last line
-- Do NOT produce a plain Q&A card — if you cannot make a quantitative problem from a concept, invent a scenario that tests the same concept numerically`,
+  "front": "A neuron has Vm = −70 mV and E_K = −90 mV. What is the driving force on K⁺?"
+  "back": "Driving force = Vm − E_K = −70 − (−90) = +20 mV (outward)"
+
+Mandatory rules:
+- Invent realistic numerical values for EVERY card — the source document does not need to contain numbers
+- Front: word problem with invented numbers, asks to solve for exactly one unknown
+- Back: labeled equation → substitution → answer with units, each step on its own line (use \\n)
+- If a concept seems non-quantitative, find the formula that governs it and build a calculation around that formula
+- Do NOT generate any standard Q&A, definition, or explanation cards — the entire deck must be calculation problems`,
   "formula":
     `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
 Example:
