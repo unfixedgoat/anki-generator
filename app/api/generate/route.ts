@@ -27,10 +27,16 @@ Required JSON format example:
 
 You MUST produce this four-option format for every card. Do NOT generate plain Q&A cards.`,
   "solve":
-    `Generate practice problem cards. The front presents a quantitative problem with realistic values asking to solve for one variable. The back shows every step of the worked solution with units, ending with the final numerical answer.
+    `Generate practice problem cards. For each concept in the document, invent a realistic quantitative problem with made-up but plausible numerical values — you MUST create numbers even if the source has none. The front presents the problem and asks to solve for one variable. The back shows every step of the worked solution with units, ending with the final numerical answer.
 Example:
-  front: "A 70 kg patient receives 2 mg/kg of drug X. What is the total dose in mg?"
-  back: "Total dose = 2 mg/kg × 70 kg = 140 mg"`,
+  front: "A 70 kg patient receives 2 mg/kg of Drug X IV. What is the total dose in mg?"
+  back: "Total dose = 2 mg/kg × 70 kg = 140 mg"
+
+Another example:
+  front: "A cell has a membrane potential of -70 mV and the Nernst potential for K⁺ is -90 mV. What is the driving force on K⁺?"
+  back: "Driving force = Vm - E_K = -70 mV - (-90 mV) = +20 mV (outward)"
+
+Invent realistic textbook-style values for every card. Do NOT skip a card just because the source lacks numbers.`,
   "formula":
     `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
 Example:
@@ -65,7 +71,7 @@ Additional rules:
 - Default formatting when the card format above does not specify: write "back" as a natural sentence or short phrase. No asterisks, bold, italics, bullet points, or dashes.
 - Use HTML <sub> and <sup> for chemical formulas and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>).
 - Visual enrichment applies to ALL card styles — evaluate visual_type independently of format.
-- NEVER invent numerical data. Only use "quickchart" when real numbers appear in the source.
+- Never invent numerical data for charts — only use "quickchart" when real numbers appear in the source. (Exception: Solve mode cards MUST invent realistic practice problem values.)
 - Mermaid: linear chains → graph LR; hierarchies → graph TD; processes → flowchart TD; interactions → sequenceDiagram. Keep edge labels ≤3 words.
 - If you cannot extract meaningful content, return [].`;
 }
