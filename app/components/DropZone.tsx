@@ -102,7 +102,7 @@ export default function DropZone() {
       formData.append("filename", file.name);
       await handleApiResult(formData, file.name);
     },
-    [density, handleApiResult]
+    [density, cardStyle, handleApiResult]
   );
 
   const processText = useCallback(async () => {
@@ -113,7 +113,7 @@ export default function DropZone() {
     formData.append("density", density);
     formData.append("style", cardStyle);
     await handleApiResult(formData, "pasted text");
-  }, [rawText, density, handleApiResult]);
+  }, [rawText, density, cardStyle, handleApiResult]);
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
