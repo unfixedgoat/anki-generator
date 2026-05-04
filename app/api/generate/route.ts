@@ -137,7 +137,9 @@ export async function POST(req: NextRequest) {
     const target = cardTarget(documentText, densityKey);
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      systemInstruction: buildSystemInstruction(styleModifier),
+      config: {
+        systemInstruction: buildSystemInstruction(styleModifier),
+      },
       contents: [
         {
           role: "user",
