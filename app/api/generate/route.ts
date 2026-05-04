@@ -27,16 +27,20 @@ Required JSON format example:
 
 You MUST produce this four-option format for every card. Do NOT generate plain Q&A cards.`,
   "solve":
-    `Generate practice problem cards. For each concept in the document, invent a realistic quantitative problem with made-up but plausible numerical values — you MUST create numbers even if the source has none. The front presents the problem and asks to solve for one variable. The back shows every step of the worked solution with units, ending with the final numerical answer.
-Example:
-  front: "A 70 kg patient receives 2 mg/kg of Drug X IV. What is the total dose in mg?"
-  back: "Total dose = 2 mg/kg × 70 kg = 140 mg"
+    `Generate worked practice problem cards. Every card MUST be a solvable quantitative problem — not a definition, not a concept question. You MUST invent realistic numerical values for every card even if the source document contains no numbers at all.
+
+Required JSON format:
+  "front": "A 70 kg patient is given 0.1 mg/kg of epinephrine. What is the total dose in mg?"
+  "back": "Total dose = 0.1 mg/kg × 70 kg = 7 mg"
 
 Another example:
-  front: "A cell has a membrane potential of -70 mV and the Nernst potential for K⁺ is -90 mV. What is the driving force on K⁺?"
-  back: "Driving force = Vm - E_K = -70 mV - (-90 mV) = +20 mV (outward)"
+  "front": "A neuron has a resting membrane potential of -70 mV. The equilibrium potential for K⁺ is -90 mV. What is the driving force on K⁺?"
+  "back": "Driving force = Vm − E_K = −70 mV − (−90 mV) = +20 mV (outward)"
 
-Invent realistic textbook-style values for every card. Do NOT skip a card just because the source lacks numbers.`,
+Rules for every solve card:
+- Front: a word problem with invented but realistic numbers, asking to solve for one unknown
+- Back: step-by-step solution with units at each step, final numerical answer on the last line
+- Do NOT produce a plain Q&A card — if you cannot make a quantitative problem from a concept, invent a scenario that tests the same concept numerically`,
   "formula":
     `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
 Example:
@@ -70,6 +74,7 @@ Additional rules:
 - Output ONLY a raw JSON array. No markdown fences, no commentary, no extra keys.
 - Default formatting when the card format above does not specify: write "back" as a natural sentence or short phrase. No asterisks, bold, italics, bullet points, or dashes.
 - Use HTML <sub> and <sup> for chemical formulas and exponents (e.g. H<sub>2</sub>O, Ca<sup>2+</sup>).
+- Use Unicode Greek letters and math symbols directly — never spell them out. Examples: Δ not "delta", α not "alpha", β not "beta", μ not "mu", Σ not "sigma", π not "pi", ≈ not "approximately", → not "yields".
 - Visual enrichment applies to ALL card styles — evaluate visual_type independently of format.
 - Never invent numerical data for charts — only use "quickchart" when real numbers appear in the source. (Exception: Solve mode cards MUST invent realistic practice problem values.)
 - Mermaid: linear chains → graph LR; hierarchies → graph TD; processes → flowchart TD; interactions → sequenceDiagram. Keep edge labels ≤3 words.
