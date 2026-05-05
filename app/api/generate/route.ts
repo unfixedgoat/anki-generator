@@ -143,7 +143,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
     documentText = text;
-    deckName = (formData.get("filename") as string | null)?.replace(/\.pdf$/i, "") || "pasted_text";
+    const baseName = (formData.get("filename") as string | null)?.replace(/\.pdf$/i, "") || "pasted_text";
+    const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+    deckName = `${baseName} ${ts}`;
   } catch {
     return NextResponse.json({ error: "Failed to read form data" }, { status: 400 });
   }
