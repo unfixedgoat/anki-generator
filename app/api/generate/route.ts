@@ -3,6 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
 
+export const maxDuration = 60;
+
 const STYLE_MODIFIERS: Record<string, string> = {
   "standard":
     "Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
@@ -173,7 +175,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Gemini request failed: ${message}` }, { status: 502 });
   }
 
-  const cards = await enrichCards(rawCards);
+  let cards: Awaited<ReturnType<typeof enrichCards>>;
+  try {
+    cards = await enrichCards(rawCards);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: `Visual enrichment failed: ${message}` }, { status: 500 });
+  }
+
   if (cards.length === 0) {
     return NextResponse.json({ error: "No flashcards could be generated from this document" }, { status: 422 });
   }
