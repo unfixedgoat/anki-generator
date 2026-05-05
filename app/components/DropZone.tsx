@@ -40,6 +40,7 @@ export default function DropZone() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [density, setDensity] = useState<Density>("high-yield");
   const [cardStyle, setCardStyle] = useState<CardStyle>("standard");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [rawText, setRawText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -99,10 +100,11 @@ export default function DropZone() {
       formData.append("text", text);
       formData.append("density", density);
       formData.append("style", cardStyle);
+      formData.append("customPrompt", customPrompt);
       formData.append("filename", file.name);
       await handleApiResult(formData, file.name);
     },
-    [density, cardStyle, handleApiResult]
+    [density, cardStyle, customPrompt, handleApiResult]
   );
 
   const processText = useCallback(async () => {
@@ -112,8 +114,9 @@ export default function DropZone() {
     formData.append("text", text);
     formData.append("density", density);
     formData.append("style", cardStyle);
+    formData.append("customPrompt", customPrompt);
     await handleApiResult(formData, "pasted text");
-  }, [rawText, density, cardStyle, handleApiResult]);
+  }, [rawText, density, cardStyle, customPrompt, handleApiResult]);
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
@@ -260,6 +263,23 @@ export default function DropZone() {
 
       <DensityToggle value={density} onChange={setDensity} disabled={isBusy} />
       <StyleToggle value={cardStyle} onChange={setCardStyle} disabled={isBusy} />
+
+      {/* ── Custom prompt box ────────────────────────────────────────────── */}
+      {cardStyle === "custom" && (
+        <textarea
+          value={customPrompt}
+          onChange={(e) => setCustomPrompt(e.target.value)}
+          placeholder="Describe exactly how you want Gemini to format your cards…"
+          disabled={isBusy}
+          className={[
+            "w-full h-28 px-4 py-3 rounded-2xl border border-slate-200 bg-white",
+            "text-sm text-slate-700 placeholder:text-slate-300",
+            "resize-none focus:outline-none focus:border-slate-400",
+            "leading-relaxed transition-colors duration-150",
+            isBusy ? "opacity-40 pointer-events-none" : "",
+          ].join(" ")}
+        />
+      )}
 
       {/* ── PDF drop zone ────────────────────────────────────────────────── */}
       {inputType === "pdf" && (

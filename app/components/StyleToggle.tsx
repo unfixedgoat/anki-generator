@@ -7,7 +7,8 @@ export type CardStyle =
   | "essay"
   | "mcq"
   | "solve"
-  | "formula";
+  | "formula"
+  | "custom";
 
 interface Option {
   value: CardStyle;
@@ -50,6 +51,11 @@ const OPTIONS: Option[] = [
     value: "formula",
     label: "Formula",
     description: "Recall the equation or formula for a given concept.",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Write your own formatting instructions for Gemini.",
   },
 ];
 

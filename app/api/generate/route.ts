@@ -136,7 +136,12 @@ export async function POST(req: NextRequest) {
     densityModifier = DENSITY_MODIFIERS[densityKey];
 
     const rawStyle = (formData.get("style") as string | null) ?? "standard";
-    styleModifier = STYLE_MODIFIERS[rawStyle] ?? STYLE_MODIFIERS["standard"];
+    const customPrompt = (formData.get("customPrompt") as string | null)?.trim() ?? "";
+    if (rawStyle === "custom" && customPrompt) {
+      styleModifier = `CUSTOM CARD FORMAT — follow these instructions exactly, they override all defaults:\n${customPrompt}`;
+    } else {
+      styleModifier = STYLE_MODIFIERS[rawStyle] ?? STYLE_MODIFIERS["standard"];
+    }
 
     const text = (formData.get("text") as string | null)?.trim();
     if (!text) {
