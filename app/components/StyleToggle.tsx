@@ -55,7 +55,7 @@ const OPTIONS: Option[] = [
   {
     value: "custom",
     label: "Custom",
-    description: "Write your own formatting instructions for Gemini.",
+    description: "Write your own card formatting instructions for Gemini.",
   },
 ];
 
