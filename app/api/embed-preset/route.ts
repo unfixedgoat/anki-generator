@@ -99,7 +99,8 @@ export async function POST(req: NextRequest) {
 
     // Open existing SQLite database
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const SQL = require("sql.js") as SqlModule;
+    const initSqlJs = require("sql.js") as () => Promise<SqlModule>;
+    const SQL = await initSqlJs();
     const db = new SQL.Database(dbBytes);
 
     // Read current dconf and decks

@@ -79,7 +79,8 @@ export interface AnkiCard {
 
 export async function buildApkg(deckName: string, cards: AnkiCard[]): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const SQL = require("sql.js") as { Database: new () => SqlDatabase };
+  const initSqlJs = require("sql.js") as () => Promise<{ Database: new () => SqlDatabase }>;
+  const SQL = await initSqlJs();
   const db = new SQL.Database();
   db.run(TEMPLATE_SQL);
 
