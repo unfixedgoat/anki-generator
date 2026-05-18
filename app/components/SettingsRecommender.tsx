@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import {
   computePreset,
   densityToIntensity,
@@ -286,19 +286,28 @@ interface Props {
 }
 
 export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Props) {
-  const [daysUntilExam, setDaysUntilExam]   = useState("");
-  const [goal, setGoal]                      = useState<GoalProfile>("balanced");
-  const [budget, setBudget]                  = useState("");
-  const [difficulty, setDifficulty]          = useState<DifficultyAssessment>("medium");
-  const [preset, setPreset]                  = useState<AnkiPreset | null>(null);
-  const [isRegenerating, setIsRegenerating]  = useState(false);
+  const [daysUntilExam, setDaysUntilExam]       = useState("");
+  const [goal, setGoal]                          = useState<GoalProfile>("balanced");
+  const [budget, setBudget]                      = useState("");
+  const [difficulty, setDifficulty]              = useState<DifficultyAssessment>("medium");
+  const [preset, setPreset]                      = useState<AnkiPreset | null>(null);
+  const [isRegenerating, setIsRegenerating]      = useState(false);
+  const [manualCardCount, setManualCardCount]    = useState(() =>
+    genInfo?.cardCount != null ? String(genInfo.cardCount) : ""
+  );
 
   // live card count — starts from prop, updates when regeneration succeeds
   const [liveCardCount, setLiveCardCount]    = useState<number | null>(null);
   const [liveBlob, setLiveBlob]              = useState<Blob | null>(null);
   const [liveGenInfo, setLiveGenInfo]        = useState<GenerationInfo | null>(null);
 
-  const cardCount  = liveCardCount  ?? genInfo?.cardCount  ?? null;
+  // sync manual input when an external deck count arrives (initial prop or regeneration)
+  useEffect(() => {
+    const from = liveCardCount ?? genInfo?.cardCount;
+    if (from != null) setManualCardCount(String(from));
+  }, [liveCardCount, genInfo?.cardCount]);
+
+  const cardCount  = manualCardCount !== "" ? (parseInt(manualCardCount, 10) || null) : null;
   const apkgBlob   = liveBlob       ?? genInfo?.blob       ?? null;
   const activeInfo = liveGenInfo    ?? genInfo;
 
@@ -391,22 +400,28 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         <h2 className="text-base font-semibold text-slate-800 tracking-tight">
           Settings Recommender
         </h2>
-        {cardCount !== null ? (
-          <p className="text-[11px] text-slate-400 tracking-wide">
-            Tuning settings for your{" "}
-            <span className="font-semibold text-slate-600">{cardCount}-card deck</span>
-          </p>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-2">
-            <Lock className="w-9 h-9 text-[#f0c87a]" />
-            <p className="text-slate-400 text-sm">Generate a deck above to unlock settings</p>
-          </div>
-        )}
+        <p className="text-[11px] text-slate-400 tracking-wide">
+          Enter your deck size and study window to get optimal Anki settings
+        </p>
       </div>
 
       {/* Inputs */}
-      <div className={["w-full space-y-4", !cardCount ? "opacity-40 pointer-events-none" : ""].join(" ")}>
-        {/* Days row — only shown; no deck size input (auto-populated) */}
+      <div className="w-full space-y-4">
+        {/* Card count */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
+            Card count
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={manualCardCount}
+            onChange={(e) => setManualCardCount(e.target.value)}
+            placeholder="number of cards in your deck"
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
+          />
+        </div>
+
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
             Days until exam
