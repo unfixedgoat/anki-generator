@@ -1,10 +1,16 @@
-import DropZone from "@/app/components/DropZone";
+"use client";
+
+import { useState } from "react";
+import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
+import SettingsRecommender from "@/app/components/SettingsRecommender";
 
 export default function Home() {
+  const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-white px-6">
+    <main className="flex flex-col items-center bg-white px-6 py-16 gap-20">
+      {/* Generator */}
       <div className="flex flex-col items-center gap-10 w-full">
-        {/* Wordmark */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
             Anki Generator
@@ -13,10 +19,22 @@ export default function Home() {
             Upload a document. Get flashcards.
           </p>
         </div>
-
-        <DropZone />
-
+        <DropZone onGenerated={setGenInfo} />
       </div>
+
+      {/* Divider */}
+      <div className="w-full max-w-xl flex items-center gap-4">
+        <div className="flex-1 h-px bg-slate-100" />
+        <span className="text-[10px] uppercase tracking-widest text-slate-300 flex-shrink-0">
+          Settings
+        </span>
+        <div className="flex-1 h-px bg-slate-100" />
+      </div>
+
+      {/* Settings Recommender */}
+      <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
+
+      <div className="h-8" />
     </main>
   );
 }

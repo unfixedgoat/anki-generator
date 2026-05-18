@@ -70,8 +70,13 @@ function buildSystemInstruction(styleModifier: string): string {
 - "back"        : string  — the answer or explanation side of the card
 - "card_type"   : string  — one of: "basic", "cloze", "definition", "process", "comparison"
 - "citation"    : string  — short reference to where in the source this fact appears (e.g. "Section 3.2")
-- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none". Use "wikimedia" for anatomical structures or real-world biological entities. Use "mermaid" for abstract processes and relationships. Use "quickchart" ONLY when the source contains actual numerical data. Omit or use "none" otherwise.
-- "visual_data" : string  — Required when visual_type is set. For "wikimedia": a specific image search term. For "mermaid": raw Mermaid syntax. For "quickchart": a Chart.js config JSON string.
+- "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none".
+  Ask yourself: would a textbook include a figure here? If yes, pick the right type below.
+  Use "wikimedia" when the concept has a real-world referent that Wikipedia would illustrate with a photograph or diagram — regardless of subject. This includes: any named structure, organ, organism, apparatus, instrument, device, cell type, molecule, compound, geographic feature, historical artifact, mathematical object, or physical system. If a student would Google image search it to understand it, use "wikimedia". Examples span all fields: a neuron synapse, the amygdala, a galvanic cell, a DNA double helix, a supply-demand curve, a Venn diagram, a geometric solid, a balance sheet layout, a neurotransmitter receptor, an action potential trace.
+  Use "mermaid" when the concept is a process, relationship, hierarchy, or logical flow with no single real-world image — something a textbook would show as a drawn diagram with boxes and arrows. Examples: a signal transduction cascade, the stages of mitosis, Le Chatelier equilibrium shifts, a cognitive-behavioral therapy cycle, a decision tree, a neural pathway, an algorithm flowchart, a market feedback loop, a Krebs cycle, a classification taxonomy.
+  Use "quickchart" ONLY when the source text contains actual numerical data worth visualizing as a chart (bar, line, pie). Do not invent numbers.
+  Omit or use "none" for simple definitions, vocabulary cards, and facts where a visual adds nothing.
+- "visual_data" : string  — Required when visual_type is set. For "wikimedia": write a specific, multi-word academic search term that includes the subject domain to avoid matching films, companies, or disambiguation pages (e.g. "catalysis chemistry enzyme reaction" not "catalyst"; "galvanic electrochemical cell diagram" not "battery"; "synapse neurotransmitter vesicle" not "synapse"; "amygdala brain anatomy" not "amygdala"; "supply demand curve microeconomics" not "supply and demand"). The more specific the term, the more likely Wikipedia returns the correct scientific article. For "mermaid": raw Mermaid syntax. For "quickchart": a Chart.js config JSON string.
 
 CARD FORMAT — this is your primary instruction, follow it exactly:
 ${styleModifier}
@@ -89,16 +94,20 @@ Additional rules:
 
 function cardTarget(text: string, density: string): number {
   const words = text.trim().split(/\s+/).length;
-  // Base target scales with document size
+  // Thresholds are intentionally aggressive — structured study guides and
+  // bullet-point notes pack far more distinct testable facts per word than
+  // prose. Better to ask for more and let Gemini stop at natural saturation
+  // than to cap too low and miss half the content.
   let base: number;
-  if (words < 500)       base = 10;
-  else if (words < 2000) base = 20;
-  else if (words < 5000) base = 40;
-  else if (words < 10000) base = 70;
-  else if (words < 20000) base = 110;
-  else                   base = 150;
+  if (words < 300)        base = 10;
+  else if (words < 800)   base = 20;
+  else if (words < 2000)  base = 40;
+  else if (words < 5000)  base = 65;
+  else if (words < 10000) base = 100;
+  else if (words < 20000) base = 140;
+  else                    base = 180;
 
-  const multiplier = density === "high-yield" ? 0.5 : density === "granular" ? 1.4 : 1.0;
+  const multiplier = density === "high-yield" ? 0.5 : density === "granular" ? 1.5 : 1.0;
   return Math.round(base * multiplier);
 }
 
@@ -106,10 +115,75 @@ function stripMarkdown(text: string): string {
   return text.replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1").replace(/_{1,3}([^_]+)_{1,3}/g, "$1");
 }
 
+// Gemini sometimes emits malformed JSON string values: literal control
+// characters (0x00–0x1F) instead of escape sequences, and unescaped double
+// quotes inside strings (e.g. quoting text or notation). This scanner fixes
+// both while leaving structural JSON tokens untouched.
+//
+// For a potential closing '"', we peek at the next non-whitespace character:
+// if it isn't a structural JSON token (:  ,  }  ]), the '"' must be an
+// interior quote and is escaped as \". This heuristic is reliable for
+// LLM-generated JSON where every string value is followed by one of those
+// structural tokens.
+function repairJson(str: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        out += ch;
+        continue;
+      }
+      // Lookahead: find next non-whitespace character.
+      let j = i + 1;
+      while (j < str.length && " \t\r\n".includes(str[j])) j++;
+      const next = j < str.length ? str[j] : "";
+      if (next === "" || next === ":" || next === "," || next === "}" || next === "]") {
+        inString = false;
+        out += ch;
+      } else {
+        out += '\\"';
+      }
+      continue;
+    }
+    if (inString) {
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        if (ch === "\n") { out += "\\n"; continue; }
+        if (ch === "\r") { out += "\\r"; continue; }
+        if (ch === "\t") { out += "\\t"; continue; }
+        out += `\\u${code.toString(16).padStart(4, "0")}`;
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function extractJson(raw: string): RawCard[] {
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error("No JSON array found in model response");
-  const cards = JSON.parse(match[0]) as RawCard[];
+  const jsonStr = match[0];
+  let cards: RawCard[];
+  try {
+    cards = JSON.parse(jsonStr) as RawCard[];
+  } catch {
+    cards = JSON.parse(repairJson(jsonStr)) as RawCard[];
+  }
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
@@ -169,7 +243,7 @@ export async function POST(req: NextRequest) {
           role: "user",
           parts: [
             {
-              text: `Generate approximately ${target} flashcards from the document below.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
+              text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
             },
           ],
         },
@@ -208,6 +282,9 @@ export async function POST(req: NextRequest) {
     headers: {
       "Content-Type": "application/octet-stream",
       "Content-Disposition": `attachment; filename="${safeFilename}.apkg"`,
+      "X-Card-Count": String(cards.length),
+      "X-Density": densityKey,
+      "Access-Control-Expose-Headers": "X-Card-Count, X-Density",
     },
   });
 }

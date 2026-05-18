@@ -1,17 +1,31 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
 
+export interface GenerationInfo {
+  blob: Blob;
+  filename: string;
+  cardCount: number;
+  density: Density;
+  style: CardStyle;
+  text: string;
+}
+
+interface Props {
+  onGenerated?: (info: GenerationInfo) => void;
+}
+
 async function submitToApi(
-  formData: FormData
-): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch("/api/generate", { method: "POST", body: formData });
+  formData: FormData,
+  signal: AbortSignal
+): Promise<{ blob: Blob; filename: string; cardCount: number }> {
+  const res = await fetch("/api/generate", { method: "POST", body: formData, signal });
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
     throw new Error(data.error ?? `Error ${res.status}`);
@@ -19,7 +33,8 @@ async function submitToApi(
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="([^"]+)"/);
   const filename = match?.[1] ?? "anki_deck.apkg";
-  return { blob: await res.blob(), filename };
+  const cardCount = parseInt(res.headers.get("X-Card-Count") ?? "0", 10);
+  return { blob: await res.blob(), filename, cardCount };
 }
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -33,7 +48,7 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function DropZone() {
+export default function DropZone({ onGenerated }: Props) {
   const [inputType, setInputType] = useState<InputType>("pdf");
   const [state, setState] = useState<DropState>("idle");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -43,6 +58,8 @@ export default function DropZone() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [rawText, setRawText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastTextRef = useRef<string>("");
+  const abortRef = useRef<AbortController | null>(null);
 
   const switchMode = useCallback((mode: InputType) => {
     setInputType(mode);
@@ -51,20 +68,45 @@ export default function DropZone() {
     setErrorMsg(null);
   }, []);
 
-  const handleApiResult = useCallback(async (formData: FormData, label: string) => {
-    setFileName(label);
-    setErrorMsg(null);
-    setState("loading");
-    try {
-      const { blob, filename } = await submitToApi(formData);
-      triggerDownload(blob, filename);
-      setState("success");
-      setFileName(filename);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
-      setState("error");
-    }
+  const cancel = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    abortRef.current?.abort();
   }, []);
+
+  const handleApiResult = useCallback(
+    async (formData: FormData, label: string, sourceText: string) => {
+      setFileName(label);
+      setErrorMsg(null);
+      setState("loading");
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const { blob, filename, cardCount } = await submitToApi(formData, controller.signal);
+        triggerDownload(blob, filename);
+        setState("success");
+        setFileName(filename);
+        onGenerated?.({
+          blob,
+          filename,
+          cardCount,
+          density: formData.get("density") as Density,
+          style: formData.get("style") as CardStyle,
+          text: sourceText,
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          setState("idle");
+          setFileName(null);
+          return;
+        }
+        setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
+        setState("error");
+      } finally {
+        abortRef.current = null;
+      }
+    },
+    [onGenerated]
+  );
 
   const processFile = useCallback(
     async (file: File) => {
@@ -96,13 +138,14 @@ export default function DropZone() {
         return;
       }
 
+      lastTextRef.current = text;
       const formData = new FormData();
       formData.append("text", text);
       formData.append("density", density);
       formData.append("style", cardStyle);
       formData.append("customPrompt", customPrompt);
       formData.append("filename", file.name);
-      await handleApiResult(formData, file.name);
+      await handleApiResult(formData, file.name, text);
     },
     [density, cardStyle, customPrompt, handleApiResult]
   );
@@ -110,12 +153,13 @@ export default function DropZone() {
   const processText = useCallback(async () => {
     const text = rawText.trim();
     if (!text) return;
+    lastTextRef.current = text;
     const formData = new FormData();
     formData.append("text", text);
     formData.append("density", density);
     formData.append("style", cardStyle);
     formData.append("customPrompt", customPrompt);
-    await handleApiResult(formData, "pasted text");
+    await handleApiResult(formData, "pasted text", text);
   }, [rawText, density, cardStyle, customPrompt, handleApiResult]);
 
   const onDragOver = useCallback(
@@ -173,15 +217,11 @@ export default function DropZone() {
   const isIdle = state === "idle";
   const isBusy = isExtracting || isLoading;
 
-  // ── Shared status panels ──────────────────────────────────────────────────
-
   const ExtractingPanel = (
     <>
       <Loader2 className="w-8 h-8 text-slate-400 animate-spin" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600 tracking-wide">
-          Reading PDF…
-        </p>
+        <p className="text-sm font-medium text-slate-600 tracking-wide">Reading PDF…</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
     </>
@@ -191,11 +231,16 @@ export default function DropZone() {
     <>
       <Loader2 className="w-8 h-8 text-slate-400 animate-spin" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600 tracking-wide">
-          Analyzing &amp; Generating Cards…
-        </p>
+        <p className="text-sm font-medium text-slate-600 tracking-wide">Analyzing &amp; Generating Cards…</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
+      <button
+        onClick={cancel}
+        className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
+      >
+        <X className="w-3 h-3" strokeWidth={2} />
+        Cancel
+      </button>
     </>
   );
 
@@ -264,7 +309,7 @@ export default function DropZone() {
       <DensityToggle value={density} onChange={setDensity} disabled={isBusy} />
       <StyleToggle value={cardStyle} onChange={setCardStyle} disabled={isBusy} />
 
-      {/* ── Custom prompt box ────────────────────────────────────────────── */}
+      {/* Custom prompt box */}
       {cardStyle === "custom" && (
         <textarea
           value={customPrompt}
@@ -281,7 +326,7 @@ export default function DropZone() {
         />
       )}
 
-      {/* ── PDF drop zone ────────────────────────────────────────────────── */}
+      {/* PDF drop zone */}
       {inputType === "pdf" && (
         <div
           role="button"
@@ -351,7 +396,7 @@ export default function DropZone() {
         </div>
       )}
 
-      {/* ── Text paste area ──────────────────────────────────────────────── */}
+      {/* Text paste area */}
       {inputType === "text" && (
         <div
           className={[
