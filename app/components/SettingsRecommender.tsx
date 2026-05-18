@@ -263,7 +263,10 @@ function PresetDisplay({
             <p className="text-[10px] text-red-400 text-center">{embedError}</p>
           )}
           <p className="text-[10px] text-slate-400 text-center tracking-wide">
-            Imports into Anki with these settings already applied — no manual configuration needed.
+            Imports into Anki with these settings already applied.
+          </p>
+          <p className="text-[10px] text-slate-500 text-center tracking-wide">
+            When importing, select <em>Import with deck presets</em> in the Anki import dialog.
           </p>
         </div>
       )}
