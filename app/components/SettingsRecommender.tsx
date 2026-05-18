@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import {
   computePreset,
   densityToIntensity,
@@ -114,7 +114,7 @@ function WarningCard({
           className={[
             "flex items-center gap-1.5 text-[10px] font-medium tracking-wide",
             "px-3 py-1.5 rounded-full border transition-colors duration-150",
-            "border-amber-300 text-amber-800 hover:bg-amber-100",
+            "border-[#c97f1a] text-[#7a4f0d] hover:bg-[#fef8ee]",
             isRegenerating ? "opacity-50 cursor-not-allowed" : "",
           ].join(" ")}
         >
@@ -190,12 +190,12 @@ function PresetDisplay({
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "min / day",     val: preset.estimated_daily_minutes },
-          { label: "reviews / day", val: preset.estimated_daily_reviews },
-          { label: "new cards done", val: finishLabel },
-        ].map(({ label, val }) => (
-          <div key={label} className="bg-slate-50 rounded-xl px-3 py-3 text-center">
-            <p className="text-[18px] font-semibold text-slate-800 leading-none">{val}</p>
+          { label: "min / day",      val: preset.estimated_daily_minutes, amber: false },
+          { label: "reviews / day",  val: preset.estimated_daily_reviews, amber: false },
+          { label: "new cards done", val: finishLabel,                    amber: true  },
+        ].map(({ label, val, amber }) => (
+          <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-3 text-center">
+            <p className={["text-[18px] font-semibold leading-none", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
             <p className="text-[10px] text-slate-400 mt-1 tracking-wide">{label}</p>
           </div>
         ))}
@@ -251,8 +251,8 @@ function PresetDisplay({
             onClick={handleEmbedDownload}
             disabled={isEmbedding}
             className={[
-              "w-full py-2.5 rounded-full text-[11px] font-medium tracking-widest uppercase",
-              "bg-slate-800 text-white transition-opacity duration-150 flex items-center justify-center gap-2",
+              "w-full py-3 rounded-full text-[11px] font-medium tracking-widest uppercase",
+              "bg-[#c97f1a] text-white transition-opacity duration-150 flex items-center justify-center gap-2",
               isEmbedding ? "opacity-60 cursor-not-allowed" : "opacity-100",
             ].join(" ")}
           >
@@ -303,7 +303,6 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const activeInfo = liveGenInfo    ?? genInfo;
 
   const goalIndex  = GOAL_OPTIONS.findIndex((o) => o.value === goal);
-  const N          = GOAL_OPTIONS.length;
 
   function calculate() {
     if (!cardCount) return;
@@ -385,10 +384,11 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const canCalculate = cardCount !== null && cardCount > 0;
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-xl">
+    <div className="h-full overflow-y-auto">
+    <div className="flex flex-col items-center gap-6 w-full">
       {/* Header */}
       <div className="text-center space-y-1">
-        <h2 className="text-base font-semibold text-slate-700 tracking-tight">
+        <h2 className="text-base font-semibold text-slate-800 tracking-tight">
           Settings Recommender
         </h2>
         {cardCount !== null ? (
@@ -397,14 +397,15 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             <span className="font-semibold text-slate-600">{cardCount}-card deck</span>
           </p>
         ) : (
-          <p className="text-[11px] text-slate-400 tracking-wide">
-            Generate a deck above, or enter your details below.
-          </p>
+          <div className="flex flex-col items-center gap-2 py-2">
+            <Lock className="w-9 h-9 text-[#f0c87a]" />
+            <p className="text-slate-400 text-sm">Generate a deck above to unlock settings</p>
+          </div>
         )}
       </div>
 
       {/* Inputs */}
-      <div className="w-full space-y-4">
+      <div className={["w-full space-y-4", !cardCount ? "opacity-40 pointer-events-none" : ""].join(" ")}>
         {/* Days row — only shown; no deck size input (auto-populated) */}
         <div className="flex flex-col gap-1.5">
           <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
@@ -416,7 +417,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             value={daysUntilExam}
             onChange={(e) => setDaysUntilExam(e.target.value)}
             placeholder="leave blank if no exam"
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-slate-400 transition-colors"
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
           />
         </div>
 
@@ -425,35 +426,24 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
             Goal
           </label>
-          <div
-            className="relative inline-grid bg-slate-100 rounded-full p-[3px] w-full"
-            style={{ gridTemplateColumns: `repeat(${N}, 1fr)` }}
-          >
-            <div
-              aria-hidden
-              className="absolute rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-              style={{
-                top: "3px", bottom: "3px",
-                width: `calc(${100 / N}% - 2px)`,
-                left:  `calc(${(goalIndex * 100) / N}% + 1px)`,
-              }}
-            />
+          <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
             {GOAL_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => setGoal(opt.value)}
                 className={[
-                  "relative z-10 py-[7px] text-[10px] font-medium tracking-[0.04em] uppercase",
-                  "rounded-full transition-colors duration-150 outline-none text-center",
-                  goal === opt.value ? "text-slate-800" : "text-slate-400 hover:text-slate-500",
+                  "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 outline-none text-center",
+                  goal === opt.value
+                    ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+                    : "text-slate-400",
                 ].join(" ")}
               >
                 {opt.label}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-slate-400 text-center tracking-wide">
+          <p className="text-[11px] text-slate-400 text-center">
             {GOAL_OPTIONS[goalIndex].sub}
           </p>
         </div>
@@ -464,7 +454,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
               Material difficulty
             </label>
-            <div className="flex rounded-xl border border-slate-200 overflow-hidden bg-white">
+            <div className="flex rounded-xl border border-slate-200 overflow-hidden">
               {DIFFICULTY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -473,8 +463,8 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
                   className={[
                     "flex-1 py-2 text-[11px] font-medium transition-colors duration-150",
                     difficulty === opt.value
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:text-slate-500",
+                      ? "bg-slate-900 text-white"
+                      : "bg-white text-slate-400 hover:text-slate-500",
                   ].join(" ")}
                 >
                   {opt.label}
@@ -492,7 +482,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               placeholder="optional"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-slate-400 transition-colors"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
             />
           </div>
         </div>
@@ -503,8 +493,8 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           onClick={calculate}
           disabled={!canCalculate}
           className={[
-            "w-full py-2.5 rounded-full text-[11px] font-medium tracking-widest uppercase transition-opacity duration-150",
-            "bg-slate-800 text-white",
+            "w-full py-3 rounded-full text-[11px] font-medium tracking-widest uppercase transition-opacity duration-150",
+            "bg-[#c97f1a] text-white",
             canCalculate ? "opacity-100" : "opacity-25 cursor-not-allowed",
           ].join(" ")}
         >
@@ -522,6 +512,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           isRegenerating={isRegenerating}
         />
       )}
+    </div>
     </div>
   );
 }

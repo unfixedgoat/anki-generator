@@ -13,53 +13,19 @@ export type CardStyle =
 interface Option {
   value: CardStyle;
   label: string;
-  description: string;
+  subtitle: string;
 }
 
 const OPTIONS: Option[] = [
-  {
-    value: "standard",
-    label: "Standard",
-    description: "Clear question with a complete sentence answer.",
-  },
-  {
-    value: "cloze",
-    label: "Cloze",
-    description: "Fill-in-the-blank with the key term removed.",
-  },
-  {
-    value: "concise",
-    label: "Concise",
-    description: "Single word or short phrase answers only.",
-  },
-  {
-    value: "essay",
-    label: "Essay",
-    description: "Deep, multi-part answers for thorough understanding.",
-  },
-  {
-    value: "mcq",
-    label: "MCQ",
-    description: "Question with four options on the front, answer on the back.",
-  },
-  {
-    value: "solve",
-    label: "Solve",
-    description: "Practice problem on the front, worked solution with units on the back.",
-  },
-  {
-    value: "formula",
-    label: "Formula",
-    description: "Recall the equation or formula for a given concept.",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description: "Write your own card formatting instructions for Gemini.",
-  },
+  { value: "standard", label: "Standard", subtitle: "Q&A sentence" },
+  { value: "cloze",    label: "Cloze",    subtitle: "Fill in blank" },
+  { value: "concise",  label: "Concise",  subtitle: "Short answer" },
+  { value: "essay",    label: "Essay",    subtitle: "Long form" },
+  { value: "mcq",      label: "MCQ",      subtitle: "4 choices" },
+  { value: "solve",    label: "Solve",    subtitle: "Step by step" },
+  { value: "formula",  label: "Formula",  subtitle: "Math & chem" },
+  { value: "custom",   label: "Custom",   subtitle: "Your prompt" },
 ];
-
-const N = OPTIONS.length;
 
 interface Props {
   value: CardStyle;
@@ -68,33 +34,16 @@ interface Props {
 }
 
 export default function StyleToggle({ value, onChange, disabled = false }: Props) {
-  const selectedIndex = OPTIONS.findIndex((o) => o.value === value);
-  const description = OPTIONS[selectedIndex].description;
-
   return (
-    <div className="flex flex-col items-center gap-2.5 w-full max-w-xl">
-      <div
-        className={[
-          "relative inline-grid bg-slate-100 rounded-full p-[3px] w-full",
-          "transition-opacity duration-200",
-          disabled ? "opacity-40 pointer-events-none" : "",
-        ].join(" ")}
-        style={{ gridTemplateColumns: `repeat(${N}, 1fr)` }}
-        role="group"
-        aria-label="Card style"
-      >
-        {/* Sliding white pill */}
-        <div
-          aria-hidden
-          className="absolute rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{
-            top: "3px",
-            bottom: "3px",
-            width: `calc(${100 / N}% - 2px)`,
-            left: `calc(${(selectedIndex * 100) / N}% + 1px)`,
-          }}
-        />
-
+    <div
+      className={[
+        "w-full transition-opacity duration-200",
+        disabled ? "opacity-40 pointer-events-none" : "",
+      ].join(" ")}
+      role="group"
+      aria-label="Card style"
+    >
+      <div className="grid grid-cols-4 gap-[5px]">
         {OPTIONS.map((opt) => {
           const isActive = opt.value === value;
           return (
@@ -105,24 +54,22 @@ export default function StyleToggle({ value, onChange, disabled = false }: Props
               aria-checked={isActive}
               onClick={() => onChange(opt.value)}
               className={[
-                "relative z-10 py-[7px] text-[10px] font-medium tracking-[0.04em] uppercase",
-                "rounded-full transition-colors duration-150 outline-none text-center",
-                "focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
-                isActive ? "text-slate-800" : "text-slate-400 hover:text-slate-500",
+                "rounded-lg border px-2 py-1.5 text-center cursor-pointer text-[11px]",
+                "transition-colors duration-150 outline-none",
+                "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1",
+                isActive
+                  ? "border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee] font-medium"
+                  : "border-slate-200 bg-white text-slate-600",
               ].join(" ")}
             >
-              {opt.label}
+              <p>{opt.label}</p>
+              <p className={["text-[9px]", isActive ? "text-[#c97f1a]" : "text-slate-400"].join(" ")}>
+                {opt.subtitle}
+              </p>
             </button>
           );
         })}
       </div>
-
-      <p
-        key={value}
-        className="text-[11px] text-slate-400 tracking-wide animate-in fade-in duration-200"
-      >
-        {description}
-      </p>
     </div>
   );
 }

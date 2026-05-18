@@ -219,9 +219,9 @@ export default function DropZone({ onGenerated }: Props) {
 
   const ExtractingPanel = (
     <>
-      <Loader2 className="w-8 h-8 text-slate-400 animate-spin" strokeWidth={1.5} />
+      <Loader2 className="w-8 h-8 text-[#c97f1a] animate-spin" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600 tracking-wide">Reading PDF…</p>
+        <p className="text-sm font-medium text-slate-600">Reading PDF…</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
     </>
@@ -229,9 +229,9 @@ export default function DropZone({ onGenerated }: Props) {
 
   const LoadingPanel = (
     <>
-      <Loader2 className="w-8 h-8 text-slate-400 animate-spin" strokeWidth={1.5} />
+      <Loader2 className="w-8 h-8 text-[#c97f1a] animate-spin" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600 tracking-wide">Analyzing &amp; Generating Cards…</p>
+        <p className="text-sm font-medium text-slate-600">Analyzing &amp; Generating Cards…</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
       <button
@@ -246,9 +246,11 @@ export default function DropZone({ onGenerated }: Props) {
 
   const SuccessPanel = (
     <>
-      <CheckCircle2 className="w-8 h-8 text-emerald-500" strokeWidth={1.5} />
+      <div className="w-10 h-10 rounded-full bg-[#c97f1a] flex items-center justify-center">
+        <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={1.5} />
+      </div>
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-700 tracking-wide">Deck downloaded</p>
+        <p className="text-sm font-medium text-[#7a4f0d]">Deck downloaded</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
       <button
@@ -277,32 +279,31 @@ export default function DropZone({ onGenerated }: Props) {
   );
 
   return (
-    <div className="flex flex-col items-center gap-5 w-full max-w-xl">
+    <div className="flex flex-col items-center gap-5 w-full h-full">
 
       {/* Mode toggle */}
-      <div className="flex items-center gap-3 select-none">
+      <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full select-none">
         <button
           onClick={() => switchMode("pdf")}
           className={[
-            "text-[11px] tracking-widest uppercase transition-colors duration-150",
+            "flex-1 text-center py-[7px] rounded-full text-[11px] transition-colors duration-150",
             inputType === "pdf"
-              ? "text-slate-800 font-semibold"
-              : "text-slate-400 hover:text-slate-500 font-medium",
+              ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+              : "text-slate-400",
           ].join(" ")}
         >
-          Upload Document
+          Upload
         </button>
-        <span className="text-slate-200 text-xs">|</span>
         <button
           onClick={() => switchMode("text")}
           className={[
-            "text-[11px] tracking-widest uppercase transition-colors duration-150",
+            "flex-1 text-center py-[7px] rounded-full text-[11px] transition-colors duration-150",
             inputType === "text"
-              ? "text-slate-800 font-semibold"
-              : "text-slate-400 hover:text-slate-500 font-medium",
+              ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+              : "text-slate-400",
           ].join(" ")}
         >
-          Paste Text
+          Paste
         </button>
       </div>
 
@@ -339,18 +340,18 @@ export default function DropZone({ onGenerated }: Props) {
           onDrop={onDrop}
           className={[
             "relative flex flex-col items-center justify-center gap-5",
-            "w-full h-72 rounded-2xl border-2 border-dashed",
+            "w-full flex-1 min-h-0 rounded-xl border-2 border-dashed",
             "transition-all duration-200 select-none outline-none",
-            "focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+            "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-2",
             isHovering
-              ? "border-slate-500 bg-slate-50 scale-[1.01] cursor-copy"
+              ? "border-[#c97f1a] bg-[#fffdf7] scale-[1.01] cursor-copy"
               : isBusy
               ? "border-slate-200 bg-white cursor-default pointer-events-none"
               : isSuccess
-              ? "border-emerald-200 bg-emerald-50/30 cursor-pointer"
+              ? "border-[#f0c87a] bg-[#fef8ee] cursor-pointer"
               : isError
               ? "border-red-200 bg-red-50/30 cursor-pointer"
-              : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60 cursor-pointer",
+              : "border-[#f0c87a] bg-[#fffdf7] hover:border-[#c97f1a] cursor-pointer",
           ].join(" ")}
         >
           <input
@@ -368,17 +369,11 @@ export default function DropZone({ onGenerated }: Props) {
 
           {(isIdle || isHovering) && (
             <>
-              <Upload
-                className={[
-                  "w-8 h-8 transition-colors duration-200",
-                  isHovering ? "text-slate-500" : "text-slate-300",
-                ].join(" ")}
-                strokeWidth={1.5}
-              />
+              <Upload className="w-8 h-8 text-[#c97f1a]" strokeWidth={1.5} />
               <div className="text-center space-y-1.5">
                 <p
                   className={[
-                    "text-sm font-medium tracking-wide transition-colors duration-200",
+                    "text-sm font-medium transition-colors duration-200",
                     isHovering ? "text-slate-700" : "text-slate-500",
                   ].join(" ")}
                 >
@@ -386,7 +381,7 @@ export default function DropZone({ onGenerated }: Props) {
                 </p>
                 <p className="text-xs text-slate-400 tracking-wide">
                   or{" "}
-                  <span className="text-slate-500 underline underline-offset-2 decoration-slate-300">
+                  <span className="text-[#7a4f0d] underline underline-offset-2 decoration-[#c97f1a]">
                     browse files
                   </span>
                 </p>
@@ -400,12 +395,12 @@ export default function DropZone({ onGenerated }: Props) {
       {inputType === "text" && (
         <div
           className={[
-            "relative w-full h-72 rounded-2xl border overflow-hidden",
+            "relative w-full flex-1 min-h-0 rounded-xl border overflow-hidden",
             "transition-all duration-200",
             isBusy
               ? "border-slate-200 bg-white pointer-events-none flex flex-col items-center justify-center gap-5"
               : isSuccess
-              ? "border-emerald-200 bg-emerald-50/30 flex flex-col items-center justify-center gap-5"
+              ? "border-[#f0c87a] bg-[#fef8ee] flex flex-col items-center justify-center gap-5"
               : isError
               ? "border-red-200 bg-red-50/30 flex flex-col items-center justify-center gap-5"
               : "border-slate-200 bg-white",
@@ -434,7 +429,7 @@ export default function DropZone({ onGenerated }: Props) {
                 className={[
                   "absolute bottom-4 right-4 z-10",
                   "px-5 py-2 rounded-full text-[11px] font-medium tracking-widest uppercase",
-                  "bg-slate-800 text-white transition-opacity duration-150",
+                  "bg-[#c97f1a] text-white transition-opacity duration-150",
                   rawText.trim() ? "opacity-100" : "opacity-25 cursor-not-allowed",
                 ].join(" ")}
               >

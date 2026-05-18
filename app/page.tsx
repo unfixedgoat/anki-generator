@@ -9,37 +9,38 @@ export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
 
   return (
-    <main className="flex flex-col items-center bg-white px-6 py-16 gap-20">
-      {/* Generator */}
-      <div className="flex flex-col items-center gap-10 w-full">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
-            Anki Generator
-          </h1>
-          <p className="text-sm text-slate-400 tracking-wide">
-            Upload a document. Get flashcards.
-          </p>
+    <div className="h-screen overflow-hidden flex flex-col">
+      {/* Top bar */}
+      <header className="w-full px-6 py-5 text-center border-b border-slate-200 bg-white">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
+          Anki Generator
+        </h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Upload a document. Get flashcards.
+        </p>
+      </header>
+
+      {/* Two-column body */}
+      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 w-full">
+        {/* Left column — generator controls */}
+        <div className="bg-white border-r border-slate-200 pl-16 pr-8 py-8 h-full overflow-y-auto">
+          <div className="max-w-md mx-auto h-full">
+            <DropZone onGenerated={setGenInfo} />
+          </div>
         </div>
-        <DropZone onGenerated={setGenInfo} />
+
+        {/* Right column — settings recommender */}
+        <div className="bg-[#f7f5f0] pl-8 pr-16 py-8 h-full overflow-y-auto">
+          <div className="max-w-md mx-auto">
+            <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
+          </div>
+        </div>
       </div>
 
-      {/* Divider */}
-      <div className="w-full max-w-xl flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-100" />
-        <span className="text-[10px] uppercase tracking-widest text-slate-300 flex-shrink-0">
-          Settings
-        </span>
-        <div className="flex-1 h-px bg-slate-100" />
-      </div>
-
-      {/* Settings Recommender */}
-      <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
-
-      <div className="h-8" />
-
+      {/* Version badge */}
       <span className="fixed bottom-4 right-4 px-2.5 py-1 rounded-full bg-slate-800 text-white font-mono text-[10px] opacity-60 pointer-events-none select-none">
         {VERSION}
       </span>
-    </main>
+    </div>
   );
 }

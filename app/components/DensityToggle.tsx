@@ -40,25 +40,13 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
     <div className="flex flex-col items-center gap-2.5">
       <div
         className={[
-          "relative inline-grid grid-cols-3 bg-slate-100 rounded-full p-[3px]",
+          "inline-grid grid-cols-3 bg-[#f5f3ee] rounded-full p-[3px]",
           "transition-opacity duration-200",
           disabled ? "opacity-40 pointer-events-none" : "",
         ].join(" ")}
         role="group"
         aria-label="Card density"
       >
-        {/* Sliding white pill */}
-        <div
-          aria-hidden
-          className="absolute rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.10)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{
-            top: "3px",
-            bottom: "3px",
-            width: "calc(33.333% - 2px)",
-            left: `calc(${selectedIndex * 33.333}% + 1px)`,
-          }}
-        />
-
         {OPTIONS.map((opt) => {
           const isActive = opt.value === value;
           return (
@@ -69,10 +57,10 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
               aria-checked={isActive}
               onClick={() => onChange(opt.value)}
               className={[
-                "relative z-10 px-5 py-[7px] text-[11px] font-medium tracking-[0.06em] uppercase",
+                "px-5 py-[7px] text-[11px] font-medium tracking-[0.04em] uppercase",
                 "rounded-full transition-colors duration-150 outline-none",
-                "focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1",
-                isActive ? "text-slate-800" : "text-slate-400 hover:text-slate-500",
+                "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1",
+                isActive ? "bg-white text-[#7a4f0d] shadow-sm" : "text-slate-400 hover:text-slate-500",
               ].join(" ")}
             >
               {opt.label}
@@ -84,7 +72,7 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
       {/* Description line — fades on change via key trick */}
       <p
         key={value}
-        className="text-[11px] text-slate-400 tracking-wide animate-in fade-in duration-200"
+        className="text-[11px] text-slate-400 animate-in fade-in duration-200"
       >
         {description}
       </p>
