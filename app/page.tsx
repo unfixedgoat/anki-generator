@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
+import { VERSION } from "@/app/version";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
@@ -35,6 +36,10 @@ export default function Home() {
       <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
 
       <div className="h-8" />
+
+      <span className="fixed bottom-4 right-4 px-2.5 py-1 rounded-full bg-slate-800 text-white font-mono text-[10px] opacity-60 pointer-events-none select-none">
+        {VERSION}
+      </span>
     </main>
   );
 }
