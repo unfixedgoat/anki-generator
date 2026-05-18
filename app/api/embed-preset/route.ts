@@ -109,9 +109,16 @@ export async function POST(req: NextRequest) {
     const dconf = JSON.parse(dconfJson) as Record<string, unknown>;
     const decks = JSON.parse(decksJson) as Record<string, Record<string, unknown>>;
 
-    // Overwrite Default config in place — all decks reference id=1 by default,
-    // so patching it is guaranteed to take effect without reassigning deck confs.
-    dconf["1"] = buildDconfEntry(1, preset);
+    // Allocate a new config ID so dconf["1"] (the shared Default) is never touched.
+    const newConfigId = Math.max(...Object.keys(dconf).map(k => parseInt(k, 10))) + 1;
+    dconf[String(newConfigId)] = buildDconfEntry(newConfigId, preset);
+
+    // Point only our non-Default decks at the new config.
+    for (const [deckId, deck] of Object.entries(decks)) {
+      if (deckId !== "1" && deck["name"] !== "Default") {
+        deck["conf"] = newConfigId;
+      }
+    }
 
     // Write back
     db.run("UPDATE col SET dconf = :dconf, decks = :decks WHERE id = 1", {
