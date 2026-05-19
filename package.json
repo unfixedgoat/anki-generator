@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts"
   },
   "dependencies": {
     "@google/genai": "^1.50.1",

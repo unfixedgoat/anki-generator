@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
 
@@ -48,6 +48,12 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+const STEPS: { label: string; n: 1 | 2 | 3 }[] = [
+  { label: "Extracting text", n: 1 },
+  { label: "Generating cards", n: 2 },
+  { label: "Packaging deck", n: 3 },
+];
+
 export default function DropZone({ onGenerated }: Props) {
   const [inputType, setInputType] = useState<InputType>("pdf");
   const [state, setState] = useState<DropState>("idle");
@@ -57,9 +63,30 @@ export default function DropZone({ onGenerated }: Props) {
   const [cardStyle, setCardStyle] = useState<CardStyle>("standard");
   const [customPrompt, setCustomPrompt] = useState("");
   const [rawText, setRawText] = useState("");
+  const [loadingStep, setLoadingStep] = useState<1 | 2 | 3 | null>(null);
+  const [elapsed, setElapsed] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastTextRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
+  const step2TimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearProgressTimers = useCallback(() => {
+    if (step2TimerRef.current) { clearTimeout(step2TimerRef.current); step2TimerRef.current = null; }
+    if (elapsedIntervalRef.current) { clearInterval(elapsedIntervalRef.current); elapsedIntervalRef.current = null; }
+  }, []);
+
+  const startProgressSteps = useCallback(() => {
+    clearProgressTimers();
+    setLoadingStep(1);
+    setElapsed(0);
+    elapsedIntervalRef.current = setInterval(() => {
+      setElapsed((e) => e + 1);
+    }, 1000);
+    step2TimerRef.current = setTimeout(() => {
+      setLoadingStep((s) => (s === 1 ? 2 : s));
+    }, 2000);
+  }, [clearProgressTimers]);
 
   const switchMode = useCallback((mode: InputType) => {
     setInputType(mode);
@@ -82,7 +109,11 @@ export default function DropZone({ onGenerated }: Props) {
       abortRef.current = controller;
       try {
         const { blob, filename, cardCount } = await submitToApi(formData, controller.signal);
+        clearProgressTimers();
+        setLoadingStep(3);
+        await new Promise<void>((resolve) => setTimeout(resolve, 1500));
         triggerDownload(blob, filename);
+        setLoadingStep(null);
         setState("success");
         setFileName(filename);
         onGenerated?.({
@@ -94,6 +125,8 @@ export default function DropZone({ onGenerated }: Props) {
           text: sourceText,
         });
       } catch (err) {
+        clearProgressTimers();
+        setLoadingStep(null);
         if (err instanceof Error && err.name === "AbortError") {
           setState("idle");
           setFileName(null);
@@ -105,7 +138,7 @@ export default function DropZone({ onGenerated }: Props) {
         abortRef.current = null;
       }
     },
-    [onGenerated]
+    [onGenerated, clearProgressTimers]
   );
 
   const processFile = useCallback(
@@ -119,12 +152,15 @@ export default function DropZone({ onGenerated }: Props) {
       setFileName(file.name);
       setErrorMsg(null);
       setState("extracting");
+      startProgressSteps();
 
       let text: string;
       try {
         const { extractTextFromPdf } = await import("@/app/lib/pdfExtract");
         text = await extractTextFromPdf(file);
       } catch (err) {
+        clearProgressTimers();
+        setLoadingStep(null);
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[pdfExtract]", msg);
         setErrorMsg(`Could not extract text: ${msg}`);
@@ -133,6 +169,8 @@ export default function DropZone({ onGenerated }: Props) {
       }
 
       if (!text) {
+        clearProgressTimers();
+        setLoadingStep(null);
         setErrorMsg("This PDF contains no extractable text (it may be scanned). Try pasting the text instead.");
         setState("error");
         return;
@@ -147,20 +185,21 @@ export default function DropZone({ onGenerated }: Props) {
       formData.append("filename", file.name);
       await handleApiResult(formData, file.name, text);
     },
-    [density, cardStyle, customPrompt, handleApiResult]
+    [density, cardStyle, customPrompt, handleApiResult, startProgressSteps, clearProgressTimers]
   );
 
   const processText = useCallback(async () => {
     const text = rawText.trim();
     if (!text) return;
     lastTextRef.current = text;
+    startProgressSteps();
     const formData = new FormData();
     formData.append("text", text);
     formData.append("density", density);
     formData.append("style", cardStyle);
     formData.append("customPrompt", customPrompt);
     await handleApiResult(formData, "pasted text", text);
-  }, [rawText, density, cardStyle, customPrompt, handleApiResult]);
+  }, [rawText, density, cardStyle, customPrompt, handleApiResult, startProgressSteps]);
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
@@ -217,32 +256,55 @@ export default function DropZone({ onGenerated }: Props) {
   const isIdle = state === "idle";
   const isBusy = isExtracting || isLoading;
 
-  const ExtractingPanel = (
+  const StepsPanel = loadingStep !== null ? (
     <>
-      <Loader2 className="w-8 h-8 text-[#c97f1a] animate-spin" strokeWidth={1.5} />
-      <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600">Reading PDF…</p>
-        <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
+      <div className="flex flex-col gap-3">
+        {STEPS.map(({ label, n }) => {
+          const active = loadingStep === n;
+          const done = loadingStep > n;
+          return (
+            <div key={n} className="flex items-center gap-3">
+              {done ? (
+                <div className="w-5 h-5 rounded-full bg-[#c97f1a] flex items-center justify-center flex-shrink-0">
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path
+                      d="M1 4L3.5 6.5L9 1"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              ) : active ? (
+                <div className="w-5 h-5 rounded-full bg-[#c97f1a] flex-shrink-0 animate-pulse" />
+              ) : (
+                <div className="w-5 h-5 rounded-full border border-slate-200 flex-shrink-0" />
+              )}
+              <span
+                className={[
+                  "text-sm",
+                  active ? "text-[#7a4f0d] font-medium" : done ? "text-slate-400" : "text-slate-300",
+                ].join(" ")}
+              >
+                {label}
+              </span>
+            </div>
+          );
+        })}
       </div>
+      <p className="text-xs text-slate-400">{elapsed}s</p>
+      {loadingStep !== 3 && (
+        <button
+          onClick={cancel}
+          className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
+        >
+          <X className="w-3 h-3" strokeWidth={2} />
+          Cancel
+        </button>
+      )}
     </>
-  );
-
-  const LoadingPanel = (
-    <>
-      <Loader2 className="w-8 h-8 text-[#c97f1a] animate-spin" strokeWidth={1.5} />
-      <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-600">Analyzing &amp; Generating Cards…</p>
-        <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
-      </div>
-      <button
-        onClick={cancel}
-        className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
-      >
-        <X className="w-3 h-3" strokeWidth={2} />
-        Cancel
-      </button>
-    </>
-  );
+  ) : null;
 
   const SuccessPanel = (
     <>
@@ -362,8 +424,7 @@ export default function DropZone({ onGenerated }: Props) {
             onChange={onInputChange}
           />
 
-          {isExtracting && ExtractingPanel}
-          {isLoading && LoadingPanel}
+          {isBusy && StepsPanel}
           {isSuccess && SuccessPanel}
           {isError && ErrorPanel}
 
@@ -406,7 +467,7 @@ export default function DropZone({ onGenerated }: Props) {
               : "border-slate-200 bg-white",
           ].join(" ")}
         >
-          {isLoading && LoadingPanel}
+          {isBusy && StepsPanel}
           {isSuccess && SuccessPanel}
           {isError && ErrorPanel}
 

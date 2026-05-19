@@ -30,7 +30,7 @@ export default function Home() {
         </div>
 
         {/* Right column — settings recommender */}
-        <div className="bg-[#f7f5f0] pl-8 pr-16 py-8 h-full overflow-y-auto">
+        <div className="bg-[#f7f5f0] px-6 py-5 h-full overflow-hidden">
           <div className="max-w-md mx-auto">
             <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
           </div>

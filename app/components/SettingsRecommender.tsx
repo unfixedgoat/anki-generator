@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import {
   computePreset,
@@ -13,7 +13,7 @@ import {
 import { type GenerationInfo } from "./DropZone";
 
 const GOAL_OPTIONS: { value: GoalProfile; label: string; sub: string }[] = [
-  { value: "cram",             label: "Cram",      sub: "Exam soon, forget after is fine" },
+  { value: "cram",             label: "Cram",      sub: "Optimize for exam date, retention not prioritized" },
   { value: "exam_then_retain", label: "Ace & Keep", sub: "Ace exam, want it to stick" },
   { value: "balanced",         label: "Balanced",  sub: "Long-term with exam milestone" },
   { value: "long_term",        label: "Long-term", sub: "No exam, permanent memory" },
@@ -45,14 +45,16 @@ function Field({
   const [open, setOpen] = useState(false);
   const displayVal = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
   return (
-    <div className="flex items-start justify-between py-2.5 border-b border-slate-100 last:border-0 gap-4">
+    <div className="flex items-start justify-between py-1 border-b border-slate-100 last:border-0 gap-4">
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-[12px] text-slate-500 truncate">{label}</span>
         {rationale && (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex-shrink-0 w-4 h-4 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 text-[9px] font-bold transition-colors leading-none flex items-center justify-center"
+            aria-expanded={open}
+            aria-label={`${open ? "Hide" : "Show"} reasoning`}
+            className="flex-shrink-0 w-4 h-4 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 text-[9px] font-bold transition-colors leading-none flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
           >
             ?
           </button>
@@ -61,7 +63,7 @@ function Field({
       <div className="text-right flex-shrink-0">
         <span className="text-[12px] font-medium text-slate-700 font-mono">{displayVal}</span>
         {open && rationale && (
-          <p className="text-[10px] text-slate-400 leading-relaxed mt-1 max-w-[220px] text-right">
+          <p className="text-[10px] text-slate-400 leading-relaxed mt-1 max-w-[220px] text-right animate-fade-up">
             {rationale}
           </p>
         )}
@@ -73,8 +75,8 @@ function Field({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">{title}</p>
-      <div className="bg-white border border-slate-100 rounded-xl px-4">{children}</div>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">{title}</p>
+      <div className="bg-white border border-slate-100 rounded-xl px-[10px] py-2">{children}</div>
     </div>
   );
 }
@@ -186,7 +188,7 @@ function PresetDisplay({
   }
 
   return (
-    <div className="flex flex-col gap-5 w-full">
+    <div className="flex flex-col gap-2 w-full">
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -194,7 +196,7 @@ function PresetDisplay({
           { label: "reviews / day",  val: preset.estimated_daily_reviews, amber: false },
           { label: "new cards done", val: finishLabel,                    amber: true  },
         ].map(({ label, val, amber }) => (
-          <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-3 text-center">
+          <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-1.5 text-center">
             <p className={["text-[18px] font-semibold leading-none", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
             <p className="text-[10px] text-slate-400 mt-1 tracking-wide">{label}</p>
           </div>
@@ -215,33 +217,40 @@ function PresetDisplay({
         </div>
       )}
 
-      {/* Preset sections */}
-      <Section title="Daily Limits">
-        <Field label="New cards / day"            value={preset.new_cards_per_day}           rationale={rationaleFor("new_cards_per_day")} />
-        <Field label="Maximum reviews / day"      value={preset.maximum_reviews_per_day}     rationale={rationaleFor("maximum_reviews_per_day")} />
-        <Field label="New cards ignore review limit" value={preset.new_cards_ignore_review_limit} />
-        <Field label="Limits start from top"      value={preset.limits_start_from_top} />
-      </Section>
+      {/* Rationale hint — above the grid so users see it before interacting */}
+      <p className="text-[10px] text-slate-400 text-center tracking-wide -mb-1">
+        Tap <span className="font-bold text-slate-500">?</span> next to any field for the reasoning.
+      </p>
 
-      <Section title="New Cards">
-        <Field label="Learning steps"    value={preset.learning_steps}                         rationale={rationaleFor("learning_steps")} />
-        <Field label="Graduating interval" value={`${preset.graduating_interval}d`}            rationale={rationaleFor("graduating_interval")} />
-        <Field label="Easy interval"     value={`${preset.easy_interval}d`}                    rationale={rationaleFor("easy_interval")} />
-        <Field label="Insertion order"   value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
-      </Section>
+      {/* Preset sections — 2×2 grid */}
+      <div className="grid grid-cols-2 gap-2">
+        <Section title="Daily Limits">
+          <Field label="New cards / day"       value={preset.new_cards_per_day}                   rationale={rationaleFor("new_cards_per_day")} />
+          <Field label="Max reviews / day"     value={preset.maximum_reviews_per_day}             rationale={rationaleFor("maximum_reviews_per_day")} />
+          <Field label="Ignore review limit"   value={preset.new_cards_ignore_review_limit} />
+          <Field label="Limits from top"       value={preset.limits_start_from_top} />
+        </Section>
 
-      <Section title="Lapses">
-        <Field label="Relearning steps"  value={preset.relearning_steps}                       rationale={rationaleFor("relearning_steps")} />
-        <Field label="Minimum interval"  value={`${preset.minimum_interval}d`}                 rationale={rationaleFor("minimum_interval")} />
-        <Field label="Leech threshold"   value={preset.leech_threshold}                        rationale={rationaleFor("leech_threshold")} />
-        <Field label="Leech action"      value={preset.leech_action === "tag_only" ? "Tag only" : "Suspend"} rationale={rationaleFor("leech_action")} />
-      </Section>
+        <Section title="New Cards">
+          <Field label="Learning steps"        value={preset.learning_steps}                      rationale={rationaleFor("learning_steps")} />
+          <Field label="Graduating interval"   value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
+          <Field label="Easy interval"         value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
+          <Field label="Insertion order"       value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
+        </Section>
 
-      <Section title="FSRS">
-        <Field label="FSRS enabled"      value={true} />
-        <Field label="Desired retention" value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
-        <Field label="Maximum interval"  value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
-      </Section>
+        <Section title="Lapses">
+          <Field label="Relearning steps"      value={preset.relearning_steps}                    rationale={rationaleFor("relearning_steps")} />
+          <Field label="Min interval"          value={`${preset.minimum_interval}d`}              rationale={rationaleFor("minimum_interval")} />
+          <Field label="Leech threshold"       value={preset.leech_threshold}                     rationale={rationaleFor("leech_threshold")} />
+          <Field label="Leech action"          value={preset.leech_action === "tag_only" ? "Tag only" : "Suspend"} rationale={rationaleFor("leech_action")} />
+        </Section>
+
+        <Section title="FSRS">
+          <Field label="FSRS enabled"          value={true} />
+          <Field label="Desired retention"     value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
+          <Field label="Max interval"          value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
+        </Section>
+      </div>
 
       {/* Download actions */}
       {apkgBlob && (
@@ -253,7 +262,7 @@ function PresetDisplay({
             className={[
               "w-full py-3 rounded-full text-[11px] font-medium tracking-widest uppercase",
               "bg-[#c97f1a] text-white transition-opacity duration-150 flex items-center justify-center gap-2",
-              isEmbedding ? "opacity-60 cursor-not-allowed" : "opacity-100",
+              isEmbedding ? "opacity-60 cursor-not-allowed" : "opacity-100 hover:opacity-90",
             ].join(" ")}
           >
             {isEmbedding && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -271,9 +280,6 @@ function PresetDisplay({
         </div>
       )}
 
-      <p className="text-[10px] text-slate-400 text-center tracking-wide">
-        Tap <span className="font-bold text-slate-500">?</span> next to any field for the reasoning behind that setting.
-      </p>
     </div>
   );
 }
@@ -292,6 +298,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const [difficulty, setDifficulty]              = useState<DifficultyAssessment>("medium");
   const [preset, setPreset]                      = useState<AnkiPreset | null>(null);
   const [isRegenerating, setIsRegenerating]      = useState(false);
+  const [inputsCollapsed, setInputsCollapsed]    = useState(false);
   const [manualCardCount, setManualCardCount]    = useState(() =>
     genInfo?.cardCount != null ? String(genInfo.cardCount) : ""
   );
@@ -307,16 +314,28 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
     if (from != null) setManualCardCount(String(from));
   }, [liveCardCount, genInfo?.cardCount]);
 
+  // move focus to output when preset first appears
+  const presetOutputRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (preset) presetOutputRef.current?.focus();
+  }, [preset]);
+
+
   const cardCount  = manualCardCount !== "" ? (parseInt(manualCardCount, 10) || null) : null;
   const apkgBlob   = liveBlob       ?? genInfo?.blob       ?? null;
   const activeInfo = liveGenInfo    ?? genInfo;
 
   const goalIndex  = GOAL_OPTIONS.findIndex((o) => o.value === goal);
 
+  function parsePosInt(val: string): number | null {
+    const n = parseInt(val, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
   function calculate() {
     if (!cardCount) return;
-    const days  = daysUntilExam ? parseInt(daysUntilExam, 10) : null;
-    const mins  = budget        ? parseInt(budget, 10)        : null;
+    const days  = parsePosInt(daysUntilExam);
+    const mins  = parsePosInt(budget);
     const intensity = activeInfo ? densityToIntensity(activeInfo.density) : undefined;
     setPreset(
       computePreset({
@@ -328,6 +347,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         intensity_mode: intensity,
       })
     );
+    setInputsCollapsed(true);
   }
 
   async function handleRegenerate(newDensity: string) {
@@ -393,10 +413,9 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const canCalculate = cardCount !== null && cardCount > 0;
 
   return (
-    <div className="h-full overflow-y-auto">
-    <div className="flex flex-col items-center gap-6 w-full">
-      {/* Header */}
-      <div className="text-center space-y-1">
+    <div className="w-full flex flex-col gap-2">
+      {/* STATIC — never inside any animated container */}
+      <div className="text-center space-y-1 relative flex-shrink-0 min-h-[44px]">
         <h2 className="text-base font-semibold text-slate-800 tracking-tight">
           Settings Recommender
         </h2>
@@ -405,129 +424,169 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         </p>
       </div>
 
-      {/* Inputs */}
-      <div className="w-full space-y-4">
-        {/* Card count */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-            Card count
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={manualCardCount}
-            onChange={(e) => setManualCardCount(e.target.value)}
-            placeholder="number of cards in your deck"
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-            Days until exam
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={daysUntilExam}
-            onChange={(e) => setDaysUntilExam(e.target.value)}
-            placeholder="leave blank if no exam"
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
-          />
-        </div>
-
-        {/* Goal pill selector */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-            Goal
-          </label>
-          <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
-            {GOAL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setGoal(opt.value)}
-                className={[
-                  "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 outline-none text-center",
-                  goal === opt.value
-                    ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
-                    : "text-slate-400",
-                ].join(" ")}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-slate-400 text-center">
-            {GOAL_OPTIONS[goalIndex].sub}
-          </p>
-        </div>
-
-        {/* Difficulty + Budget row */}
-        <div className="flex gap-3">
-          <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-              Material difficulty
+      {/* Full inputs — visible when not collapsed */}
+      {!inputsCollapsed && (
+        <div key="inputs" className="w-full space-y-1.5 animate-fade-in">
+          {/* Card count */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
+              Card count
             </label>
-            <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-              {DIFFICULTY_OPTIONS.map((opt) => (
+            <input
+              type="number"
+              min={1}
+              value={manualCardCount}
+              onChange={(e) => setManualCardCount(e.target.value)}
+              placeholder="number of cards in your deck"
+              className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+            />
+          </div>
+
+          {/* Days until exam */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
+              Days until exam
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={daysUntilExam}
+              onChange={(e) => setDaysUntilExam(e.target.value)}
+              placeholder="leave blank if no exam"
+              className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+            />
+          </div>
+
+          {/* Goal pill selector */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
+              Goal
+            </label>
+            <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
+              {GOAL_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setDifficulty(opt.value)}
+                  onClick={() => setGoal(opt.value)}
                   className={[
-                    "flex-1 py-2 text-[11px] font-medium transition-colors duration-150",
-                    difficulty === opt.value
-                      ? "bg-slate-900 text-white"
-                      : "bg-white text-slate-400 hover:text-slate-500",
+                    "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                    goal === opt.value
+                      ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+                      : "text-slate-400 hover:text-slate-600",
                   ].join(" ")}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
+            <p className="text-[11px] text-slate-400 text-center">
+              {GOAL_OPTIONS[goalIndex].sub}
+            </p>
           </div>
-          <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">
-              Min / day budget
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="optional"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors"
-            />
+
+          {/* Difficulty + Budget row */}
+          <div className="flex gap-3">
+            <fieldset className="flex-1 flex flex-col gap-1.5 border-0 p-0 m-0 min-w-0">
+              <legend className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center w-full float-none">
+                Material difficulty
+              </legend>
+              <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
+                {DIFFICULTY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDifficulty(opt.value)}
+                    aria-pressed={difficulty === opt.value}
+                    className={[
+                      "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                      difficulty === opt.value
+                        ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+                        : "text-slate-400 hover:text-slate-600",
+                    ].join(" ")}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="flex-1 flex flex-col gap-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
+                Min / day budget
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="optional"
+                className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+              />
+            </div>
           </div>
         </div>
-
-        {/* Calculate button */}
-        <button
-          type="button"
-          onClick={calculate}
-          disabled={!canCalculate}
-          className={[
-            "w-full py-3 rounded-full text-[11px] font-medium tracking-widest uppercase transition-opacity duration-150",
-            "bg-[#c97f1a] text-white",
-            canCalculate ? "opacity-100" : "opacity-25 cursor-not-allowed",
-          ].join(" ")}
-        >
-          {cardCount ? `Calculate Preset for ${cardCount} Cards` : "Calculate Preset"}
-        </button>
-      </div>
-
-      {/* Output */}
-      {preset && (
-        <PresetDisplay
-          preset={preset}
-          apkgBlob={apkgBlob}
-          genInfo={activeInfo}
-          onRegenerate={handleRegenerate}
-          isRegenerating={isRegenerating}
-        />
       )}
-    </div>
+
+      {/* Compact summary pills — visible when collapsed */}
+      {inputsCollapsed && (
+        <div key="pills" className="w-full flex items-stretch gap-2 animate-fade-in">
+          {([
+            { label: "Cards",      value: String(cardCount ?? "—") },
+            { label: "Days",       value: daysUntilExam || "—" },
+            { label: "Goal",       value: GOAL_OPTIONS.find((o) => o.value === goal)?.label ?? goal },
+            { label: "Difficulty", value: DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty },
+          ] as { label: string; value: string }[]).map(({ label, value }) => (
+            <div
+              key={label}
+              className="flex-1 flex flex-col items-center gap-0.5 bg-[#fef8ee] border border-[#f0c87a] rounded-2xl px-2 py-2"
+            >
+              <span className="text-[8px] font-semibold uppercase tracking-widest text-[#c97f1a]">
+                {label}
+              </span>
+              <span className="text-[11px] font-medium text-[#7a4f0d] leading-tight text-center">
+                {value}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => { setInputsCollapsed(false); setPreset(null); }}
+            className="flex-shrink-0 self-center px-3 py-1.5 rounded-full border border-slate-200 text-[10px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Edit
+          </button>
+        </div>
+      )}
+
+      {/* Calculate / Recalculate — always visible */}
+      <button
+        type="button"
+        onClick={calculate}
+        disabled={!canCalculate}
+        className={[
+          "w-full py-2 rounded-full text-[11px] font-medium tracking-widest uppercase transition-opacity duration-150",
+          "bg-[#c97f1a] text-white",
+          canCalculate ? "opacity-100 hover:opacity-90" : "opacity-25 cursor-not-allowed",
+        ].join(" ")}
+      >
+        {inputsCollapsed
+          ? "Recalculate"
+          : cardCount
+          ? `Calculate Preset for ${cardCount} Cards`
+          : "Calculate Preset"}
+      </button>
+
+      {/* Output — mt-2 on wrapper separates input zone from output zone */}
+      {preset && (
+        <div ref={presetOutputRef} tabIndex={-1} aria-live="polite" className="mt-2 w-full animate-fade-up outline-none">
+          <PresetDisplay
+            preset={preset}
+            apkgBlob={apkgBlob}
+            genInfo={activeInfo}
+            onRegenerate={handleRegenerate}
+            isRegenerating={isRegenerating}
+          />
+        </div>
+      )}
     </div>
   );
 }

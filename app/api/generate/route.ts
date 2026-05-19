@@ -51,7 +51,8 @@ Mandatory rules:
     `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
 Example:
   front: "What is the equation for cardiac output?"
-  back: "CO = HR × SV\\nCO = cardiac output (L/min), HR = heart rate (beats/min), SV = stroke volume (mL/beat)"`,
+  back: "CO = HR × SV\\nCO = cardiac output (L/min), HR = heart rate (beats/min), SV = stroke volume (mL/beat)"
+Even in granular density mode, every card must be an equation recall card. If you have exhausted all formula-shaped content in the source, stop generating rather than falling back to fact recall, vocabulary, or definition cards — a smaller deck of valid equation cards is correct; an inflated deck of non-formula cards is not.`,
 };
 
 const DENSITY_MODIFIERS: Record<string, string> = {
@@ -181,8 +182,17 @@ function extractJson(raw: string): RawCard[] {
   let cards: RawCard[];
   try {
     cards = JSON.parse(jsonStr) as RawCard[];
-  } catch {
-    cards = JSON.parse(repairJson(jsonStr)) as RawCard[];
+  } catch (originalErr) {
+    try {
+      cards = JSON.parse(repairJson(jsonStr)) as RawCard[];
+    } catch {
+      try {
+        const truncated = jsonStr.slice(0, jsonStr.lastIndexOf("}") + 1) + "]";
+        cards = JSON.parse(repairJson(truncated)) as RawCard[];
+      } catch {
+        throw originalErr;
+      }
+    }
   }
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
@@ -237,6 +247,8 @@ export async function POST(req: NextRequest) {
       model: "gemini-2.5-flash",
       config: {
         systemInstruction: buildSystemInstruction(styleModifier),
+        maxOutputTokens: 8192,
+        temperature: 0.4,
       },
       contents: [
         {
