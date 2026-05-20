@@ -223,8 +223,8 @@ function PresetDisplay({
         Tap <span className="font-bold text-slate-500">?</span> next to any field for the reasoning.
       </p>
 
-      {/* Preset sections — 2×2 grid */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Preset sections — 1-col on mobile, 2-col on tablet+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <Section title="Daily Limits">
           <Field label="New cards / day"       value={preset.new_cards_per_day}                   rationale={rationaleFor("new_cards_per_day")} />
           <Field label="Max reviews / day"     value={preset.maximum_reviews_per_day}             rationale={rationaleFor("maximum_reviews_per_day")} />

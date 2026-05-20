@@ -351,7 +351,7 @@ export default function DropZone({ onGenerated }: Props) {
   );
 
   return (
-    <div className="flex flex-col items-center gap-5 w-full h-full">
+    <div className="flex flex-col items-center gap-5 w-full h-auto md:h-full">
 
       {/* Mode toggle */}
       <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full select-none">
@@ -426,7 +426,7 @@ export default function DropZone({ onGenerated }: Props) {
           onDrop={onDrop}
           className={[
             "relative flex flex-col items-center justify-center gap-5",
-            "w-full flex-1 min-h-0 rounded-xl border-2 border-dashed",
+            "w-full min-h-[220px] md:flex-1 md:min-h-0 rounded-xl border-2 border-dashed",
             "transition-all duration-200 select-none outline-none",
             "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-2",
             isHovering
@@ -480,7 +480,7 @@ export default function DropZone({ onGenerated }: Props) {
       {inputType === "text" && (
         <div
           className={[
-            "relative w-full flex-1 min-h-0 rounded-xl border overflow-hidden",
+            "relative w-full min-h-[220px] md:flex-1 md:min-h-0 rounded-xl border overflow-hidden",
             "transition-all duration-200",
             isBusy
               ? "border-slate-200 bg-white pointer-events-none flex flex-col items-center justify-center gap-5"
@@ -509,7 +509,7 @@ export default function DropZone({ onGenerated }: Props) {
                   "leading-relaxed",
                 ].join(" ")}
               />
-              <span className="absolute bottom-[18px] left-5 text-xs text-slate-400 pointer-events-none select-none">
+              <span className="hidden md:block absolute bottom-[18px] left-5 text-xs text-slate-400 pointer-events-none select-none">
                 ⌘↵ to generate
               </span>
               <motion.button

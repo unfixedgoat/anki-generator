@@ -9,29 +9,29 @@ export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col">
+    <div className="flex flex-col min-h-screen md:h-screen md:overflow-hidden">
       {/* Top bar */}
-      <header className="w-full px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between">
+      <header className="flex-shrink-0 w-full px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
         </div>
-        <p className="text-sm text-slate-400 mt-1 font-serif italic">
+        <p className="hidden md:block text-sm text-slate-400 mt-1 font-serif italic">
           Upload a document. Get flashcards.
         </p>
       </header>
 
-      {/* Two-column body */}
-      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 w-full">
-        {/* Left column — generator controls */}
-        <div className="bg-white border-r border-slate-200 px-8 py-8 h-full overflow-y-auto">
-          <div className="max-w-md mx-auto h-full">
+      {/* Body: stacked on mobile, side-by-side on desktop */}
+      <div className="flex flex-col md:grid md:grid-cols-2 flex-1 md:overflow-hidden">
+        {/* Generator */}
+        <div className="bg-white md:border-r border-b md:border-b-0 border-slate-200 px-4 py-6 md:px-8 md:py-8 md:h-full md:overflow-y-auto">
+          <div className="max-w-md mx-auto md:h-full">
             <DropZone onGenerated={setGenInfo} />
           </div>
         </div>
 
-        {/* Right column — settings recommender */}
-        <div className="bg-[#f7f5f0] px-6 py-5 h-full overflow-hidden">
+        {/* Settings Recommender */}
+        <div className="bg-[#f7f5f0] px-4 py-6 md:px-6 md:py-5 md:h-full md:overflow-y-auto">
           <div className="max-w-md mx-auto">
             <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
           </div>
