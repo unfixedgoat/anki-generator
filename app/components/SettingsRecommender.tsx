@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import {
   computePreset,
@@ -255,7 +256,7 @@ function PresetDisplay({
       {/* Download actions */}
       {apkgBlob && (
         <div className="flex flex-col gap-2">
-          <button
+          <motion.button
             type="button"
             onClick={handleEmbedDownload}
             disabled={isEmbedding}
@@ -264,10 +265,13 @@ function PresetDisplay({
               "bg-[#c97f1a] text-white transition-opacity duration-150 flex items-center justify-center gap-2",
               isEmbedding ? "opacity-60 cursor-not-allowed" : "opacity-100 hover:opacity-90",
             ].join(" ")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
           >
             {isEmbedding && <Loader2 className="w-3 h-3 animate-spin" />}
             {isEmbedding ? "Embedding…" : "Download with Settings Embedded"}
-          </button>
+          </motion.button>
           {embedError && (
             <p className="text-[10px] text-red-400 text-center">{embedError}</p>
           )}
@@ -416,7 +420,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
     <div className="w-full flex flex-col gap-2">
       {/* STATIC — never inside any animated container */}
       <div className="text-center space-y-1 relative flex-shrink-0 min-h-[44px]">
-        <h2 className="text-base font-semibold text-slate-800 tracking-tight">
+        <h2 className="text-base font-sans font-medium text-slate-800 tracking-tight">
           Settings Recommender
         </h2>
         <p className="text-[11px] text-slate-400 tracking-wide">
@@ -438,7 +442,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
               value={manualCardCount}
               onChange={(e) => setManualCardCount(e.target.value)}
               placeholder="number of cards in your deck"
-              className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+              className="w-full px-4 py-1.5 rounded-full border border-[#f0c87a] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
             />
           </div>
 
@@ -453,7 +457,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
               value={daysUntilExam}
               onChange={(e) => setDaysUntilExam(e.target.value)}
               placeholder="leave blank if no exam"
-              className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+              className="w-full px-4 py-1.5 rounded-full border border-[#f0c87a] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
             />
           </div>
 
@@ -469,13 +473,20 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
                   type="button"
                   onClick={() => setGoal(opt.value)}
                   className={[
-                    "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                    "relative flex-1 py-[7px] rounded-full text-[10px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
                     goal === opt.value
-                      ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+                      ? "text-[#7a4f0d] font-medium"
                       : "text-slate-400 hover:text-slate-600",
                   ].join(" ")}
                 >
-                  {opt.label}
+                  {goal === opt.value && (
+                    <motion.div
+                      layoutId="goal-active-pill"
+                      className="absolute inset-0 bg-white rounded-full shadow-sm"
+                      transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+                    />
+                  )}
+                  <span className="relative z-10">{opt.label}</span>
                 </button>
               ))}
             </div>
@@ -498,13 +509,20 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
                     onClick={() => setDifficulty(opt.value)}
                     aria-pressed={difficulty === opt.value}
                     className={[
-                      "flex-1 py-[7px] rounded-full text-[10px] transition-colors duration-150 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                      "relative flex-1 py-[7px] rounded-full text-[10px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
                       difficulty === opt.value
-                        ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+                        ? "text-[#7a4f0d] font-medium"
                         : "text-slate-400 hover:text-slate-600",
                     ].join(" ")}
                   >
-                    {opt.label}
+                    {difficulty === opt.value && (
+                      <motion.div
+                        layoutId="difficulty-active-pill"
+                        className="absolute inset-0 bg-white rounded-full shadow-sm"
+                        transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+                      />
+                    )}
+                    <span className="relative z-10">{opt.label}</span>
                   </button>
                 ))}
               </div>
@@ -519,7 +537,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
                 placeholder="optional"
-                className="w-full px-4 py-1.5 rounded-full border border-[#e2ddd6] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
+                className="w-full px-4 py-1.5 rounded-full border border-[#f0c87a] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
               />
             </div>
           </div>
@@ -558,7 +576,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       )}
 
       {/* Calculate / Recalculate — always visible */}
-      <button
+      <motion.button
         type="button"
         onClick={calculate}
         disabled={!canCalculate}
@@ -567,13 +585,16 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           "bg-[#c97f1a] text-white",
           canCalculate ? "opacity-100 hover:opacity-90" : "opacity-25 cursor-not-allowed",
         ].join(" ")}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
         {inputsCollapsed
           ? "Recalculate"
           : cardCount
           ? `Calculate Preset for ${cardCount} Cards`
           : "Calculate Preset"}
-      </button>
+      </motion.button>
 
       {/* Output — mt-2 on wrapper separates input zone from output zone */}
       {preset && (

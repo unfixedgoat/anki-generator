@@ -28,7 +28,7 @@ function parseStepsToMinutes(steps: string): number[] {
 function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, unknown> {
   return {
     id: configId,
-    name: "Anki Generator",
+    name: "highyield.cards",
     mod: Math.floor(Date.now() / 1000),
     usn: -1,
     maxTaken: 60,

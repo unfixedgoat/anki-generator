@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
@@ -295,13 +296,16 @@ export default function DropZone({ onGenerated }: Props) {
       </div>
       <p className="text-xs text-slate-400">{elapsed}s</p>
       {loadingStep !== 3 && (
-        <button
+        <motion.button
           onClick={cancel}
           className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
         >
           <X className="w-3 h-3" strokeWidth={2} />
           Cancel
-        </button>
+        </motion.button>
       )}
     </>
   ) : null;
@@ -312,9 +316,15 @@ export default function DropZone({ onGenerated }: Props) {
         <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={1.5} />
       </div>
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-[#7a4f0d]">Deck downloaded</p>
+        <p className="text-sm font-medium text-[#7a4f0d] font-serif">Deck downloaded</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
+      <span
+        onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
+        className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 cursor-pointer block text-center mt-2"
+      >
+        Report a bad deck
+      </span>
       <button
         onClick={reset}
         className="absolute bottom-5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
@@ -326,10 +336,10 @@ export default function DropZone({ onGenerated }: Props) {
 
   const ErrorPanel = (
     <>
-      <AlertCircle className="w-8 h-8 text-red-400" strokeWidth={1.5} />
+      <AlertCircle className="w-8 h-8 text-red-600" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
         <p className="text-sm font-medium text-slate-700 tracking-wide">Something went wrong</p>
-        <p className="text-xs text-red-400 max-w-xs px-4 leading-relaxed">{errorMsg}</p>
+        <p className="text-xs text-red-600 max-w-xs px-4 leading-relaxed">{errorMsg}</p>
       </div>
       <button
         onClick={reset}
@@ -348,24 +358,38 @@ export default function DropZone({ onGenerated }: Props) {
         <button
           onClick={() => switchMode("pdf")}
           className={[
-            "flex-1 text-center py-[7px] rounded-full text-[11px] transition-colors duration-150",
+            "relative flex-1 text-center py-[7px] rounded-full text-[11px]",
             inputType === "pdf"
-              ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+              ? "text-[#7a4f0d] font-medium"
               : "text-slate-400",
           ].join(" ")}
         >
-          Upload
+          {inputType === "pdf" && (
+            <motion.div
+              layoutId="source-active-pill"
+              className="absolute inset-0 bg-white rounded-full shadow-sm"
+              transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+            />
+          )}
+          <span className="relative z-10">Upload</span>
         </button>
         <button
           onClick={() => switchMode("text")}
           className={[
-            "flex-1 text-center py-[7px] rounded-full text-[11px] transition-colors duration-150",
+            "relative flex-1 text-center py-[7px] rounded-full text-[11px]",
             inputType === "text"
-              ? "bg-white text-[#7a4f0d] font-medium shadow-sm"
+              ? "text-[#7a4f0d] font-medium"
               : "text-slate-400",
           ].join(" ")}
         >
-          Paste
+          {inputType === "text" && (
+            <motion.div
+              layoutId="source-active-pill"
+              className="absolute inset-0 bg-white rounded-full shadow-sm"
+              transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+            />
+          )}
+          <span className="relative z-10">Paste</span>
         </button>
       </div>
 
@@ -476,6 +500,7 @@ export default function DropZone({ onGenerated }: Props) {
               <textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) { e.preventDefault(); processText(); } }}
                 placeholder="Paste your notes, lecture text, or study material here…"
                 className={[
                   "absolute inset-0 w-full h-full px-5 py-4 pb-14",
@@ -484,7 +509,10 @@ export default function DropZone({ onGenerated }: Props) {
                   "leading-relaxed",
                 ].join(" ")}
               />
-              <button
+              <span className="absolute bottom-[18px] left-5 text-xs text-slate-400 pointer-events-none select-none">
+                ⌘↵ to generate
+              </span>
+              <motion.button
                 onClick={processText}
                 disabled={!rawText.trim()}
                 className={[
@@ -493,9 +521,12 @@ export default function DropZone({ onGenerated }: Props) {
                   "bg-[#c97f1a] text-white transition-opacity duration-150",
                   rawText.trim() ? "opacity-100" : "opacity-25 cursor-not-allowed",
                 ].join(" ")}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
                 Generate
-              </button>
+              </motion.button>
             </>
           )}
         </div>

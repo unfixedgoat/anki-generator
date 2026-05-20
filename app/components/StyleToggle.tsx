@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "framer-motion";
+
 export type CardStyle =
   | "standard"
   | "cloze"
@@ -43,7 +45,7 @@ export default function StyleToggle({ value, onChange, disabled = false }: Props
       role="group"
       aria-label="Card style"
     >
-      <div className="grid grid-cols-4 gap-[5px]">
+      <motion.div className="grid grid-cols-4 gap-[5px]">
         {OPTIONS.map((opt) => {
           const isActive = opt.value === value;
           return (
@@ -57,9 +59,10 @@ export default function StyleToggle({ value, onChange, disabled = false }: Props
                 "rounded-lg border px-2 py-1.5 text-center cursor-pointer text-[11px]",
                 "transition-colors duration-150 outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1",
+                "active:scale-[0.98]",
                 isActive
                   ? "border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee] font-medium"
-                  : "border-slate-200 bg-white text-slate-600",
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-[#fef8ee]",
               ].join(" ")}
             >
               <p>{opt.label}</p>
@@ -69,7 +72,7 @@ export default function StyleToggle({ value, onChange, disabled = false }: Props
             </button>
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }

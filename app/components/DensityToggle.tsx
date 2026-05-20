@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "framer-motion";
+
 export type Density = "high-yield" | "comprehensive" | "granular";
 
 interface Option {
@@ -57,13 +59,20 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
               aria-checked={isActive}
               onClick={() => onChange(opt.value)}
               className={[
-                "px-5 py-[7px] text-[11px] font-medium tracking-[0.04em] uppercase",
-                "rounded-full transition-colors duration-150 outline-none",
+                "relative px-5 py-[7px] text-[11px] font-medium tracking-[0.04em] uppercase",
+                "rounded-full outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1",
-                isActive ? "bg-white text-[#7a4f0d] shadow-sm" : "text-slate-400 hover:text-slate-500",
+                isActive ? "text-[#7a4f0d]" : "text-slate-400 hover:text-slate-500",
               ].join(" ")}
             >
-              {opt.label}
+              {isActive && (
+                <motion.div
+                  layoutId="density-active-pill"
+                  className="absolute inset-0 bg-white rounded-full shadow-sm"
+                  transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+                />
+              )}
+              <span className="relative z-10">{opt.label}</span>
             </button>
           );
         })}
