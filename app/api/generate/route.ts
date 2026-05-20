@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
+import { ratelimit, isPro } from "@/app/lib/ratelimit";
 
 export const maxDuration = 60;
 
@@ -202,6 +203,23 @@ function sanitizeFilename(name: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const identifier = req.headers.get("x-forwarded-for") ?? "anonymous";
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    console.warn("Upstash env vars not set — skipping rate limit check");
+    // continue without rate limiting
+  } else {
+    const pro = await isPro(identifier);
+    if (!pro) {
+      const { success, limit, remaining, reset } = await ratelimit.limit(identifier);
+      if (!success) {
+        return NextResponse.json(
+          { error: "Free limit reached", limit, remaining, reset, upgrade: "https://highyield.cards" },
+          { status: 429 }
+        );
+      }
+    }
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "GEMINI_API_KEY is not set" }, { status: 500 });
@@ -232,6 +250,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
     documentText = text;
+    if (documentText.length > 50_000) {
+      return NextResponse.json(
+        { error: "characters", message: "Text exceeds 50,000 character limit (~10 dense pages). Upgrade to Pro for 300,000 characters." },
+        { status: 400 }
+      );
+    }
     const baseName = (formData.get("filename") as string | null)?.replace(/\.pdf$/i, "") || "pasted_text";
     const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
     deckName = `${baseName} ${ts}`;

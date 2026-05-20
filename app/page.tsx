@@ -17,7 +17,7 @@ export default function Home() {
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
         </div>
         <p className="hidden sm:block text-sm text-slate-400 mt-1 font-serif italic">
-          Upload a document. Get flashcards.
+          Drop your syllabus. Get an Anki deck built around your exam date.
         </p>
       </header>
 

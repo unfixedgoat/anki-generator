@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
+import UpgradeModal from "./UpgradeModal";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -22,11 +23,16 @@ interface Props {
   onGenerated?: (info: GenerationInfo) => void;
 }
 
+class RateLimitError extends Error {
+  constructor() { super("rate_limited"); this.name = "RateLimitError"; }
+}
+
 async function submitToApi(
   formData: FormData,
   signal: AbortSignal
 ): Promise<{ blob: Blob; filename: string; cardCount: number }> {
   const res = await fetch("/api/generate", { method: "POST", body: formData, signal });
+  if (res.status === 429) throw new RateLimitError();
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
     throw new Error(data.error ?? `Error ${res.status}`);
@@ -66,7 +72,16 @@ export default function DropZone({ onGenerated }: Props) {
   const [rawText, setRawText] = useState("");
   const [loadingStep, setLoadingStep] = useState<1 | 2 | 3 | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [upgradeReason, setUpgradeReason] = useState<"limit" | "characters" | null>(null);
+  const [identifier, setIdentifier] = useState("anonymous");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/whoami")
+      .then((r) => r.json())
+      .then((d) => setIdentifier(d.identifier ?? "anonymous"))
+      .catch(() => {});
+  }, []);
   const lastTextRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
   const step2TimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,6 +148,12 @@ export default function DropZone({ onGenerated }: Props) {
           setFileName(null);
           return;
         }
+        if (err instanceof RateLimitError) {
+          setState("idle");
+          setFileName(null);
+          setUpgradeReason("limit");
+          return;
+        }
         setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
         setState("error");
       } finally {
@@ -177,6 +198,15 @@ export default function DropZone({ onGenerated }: Props) {
         return;
       }
 
+      if (text.length > 50_000) {
+        clearProgressTimers();
+        setLoadingStep(null);
+        setState("idle");
+        setFileName(null);
+        setUpgradeReason("characters");
+        return;
+      }
+
       lastTextRef.current = text;
       const formData = new FormData();
       formData.append("text", text);
@@ -192,6 +222,10 @@ export default function DropZone({ onGenerated }: Props) {
   const processText = useCallback(async () => {
     const text = rawText.trim();
     if (!text) return;
+    if (text.length > 50_000) {
+      setUpgradeReason("characters");
+      return;
+    }
     lastTextRef.current = text;
     startProgressSteps();
     const formData = new FormData();
@@ -351,6 +385,7 @@ export default function DropZone({ onGenerated }: Props) {
   );
 
   return (
+    <>
     <div className="flex flex-col items-center gap-5 w-full h-auto md:h-full">
 
       {/* Mode toggle */}
@@ -532,5 +567,12 @@ export default function DropZone({ onGenerated }: Props) {
         </div>
       )}
     </div>
+    <UpgradeModal
+      isOpen={upgradeReason !== null}
+      onClose={() => setUpgradeReason(null)}
+      reason={upgradeReason ?? "limit"}
+      identifier={identifier}
+    />
+    </>
   );
 }
