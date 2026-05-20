@@ -42,7 +42,7 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
     <div className="flex flex-col items-center gap-2.5">
       <div
         className={[
-          "inline-grid grid-cols-3 bg-[#f5f3ee] rounded-full p-[3px]",
+          "w-full grid grid-cols-3 bg-[#f5f3ee] rounded-full p-[3px]",
           "transition-opacity duration-200",
           disabled ? "opacity-40 pointer-events-none" : "",
         ].join(" ")}
@@ -59,7 +59,7 @@ export default function DensityToggle({ value, onChange, disabled = false }: Pro
               aria-checked={isActive}
               onClick={() => onChange(opt.value)}
               className={[
-                "relative px-5 py-[7px] text-[11px] font-medium tracking-[0.04em] uppercase",
+                "relative px-5 py-[7px] text-[10px] sm:text-[11px] font-medium tracking-tight sm:tracking-[0.04em] uppercase",
                 "rounded-full outline-none",
                 "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1",
                 isActive ? "text-[#7a4f0d]" : "text-slate-400 hover:text-slate-500",

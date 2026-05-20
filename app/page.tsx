@@ -38,9 +38,19 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Feedback button */}
+      {/* Mobile feedback link — only visible below sm breakpoint */}
+      <div className="block sm:hidden text-center py-4">
+        <button
+          onClick={() => window.open('https://tally.so/r/b5YPre', '_blank')}
+          className="text-xs text-[#7a4f0d] underline"
+        >
+          Leave feedback
+        </button>
+      </div>
+
+      {/* Feedback button — hidden on mobile, visible sm+ */}
       <motion.div
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50"
+        className="hidden sm:flex fixed bottom-6 right-6 z-50"
         initial={{ opacity: 0, scale: 0.8, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8, delay: 0.5 }}
