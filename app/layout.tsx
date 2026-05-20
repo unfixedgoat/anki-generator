@@ -21,9 +21,34 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "highyield.cards",
+  title: "highyield.cards — AI Anki decks from any PDF",
   description:
-    "AI Anki decks from any PDF. Free FSRS settings calculator for pre-med and serious students.",
+    "Drop your syllabus. Get an Anki deck built around your exam date. Free AI-powered flashcard generator optimized for pre-med and serious learners.",
+  metadataBase: new URL("https://highyield.cards"),
+  openGraph: {
+    title: "highyield.cards — AI Anki decks from any PDF",
+    description:
+      "Drop your syllabus. Get an Anki deck built around your exam date.",
+    url: "https://highyield.cards",
+    siteName: "highyield.cards",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "highyield.cards — AI Anki decks from any PDF",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "highyield.cards — AI Anki decks from any PDF",
+    description:
+      "Drop your syllabus. Get an Anki deck built around your exam date.",
+    images: ["/og-image.png"],
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
