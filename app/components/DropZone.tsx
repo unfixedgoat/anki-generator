@@ -426,7 +426,7 @@ export default function DropZone({ onGenerated }: Props) {
           onDrop={onDrop}
           className={[
             "relative flex flex-col items-center justify-center gap-5",
-            "w-full min-h-[220px] md:flex-1 md:min-h-0 rounded-xl border-2 border-dashed",
+            "w-full min-h-[180px] md:flex-1 md:min-h-0 rounded-xl border-2 border-dashed",
             "transition-all duration-200 select-none outline-none",
             "focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-2",
             isHovering

@@ -16,7 +16,7 @@ export default function Home() {
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
         </div>
-        <p className="hidden md:block text-sm text-slate-400 mt-1 font-serif italic">
+        <p className="hidden sm:block text-sm text-slate-400 mt-1 font-serif italic">
           Upload a document. Get flashcards.
         </p>
       </header>
@@ -24,14 +24,14 @@ export default function Home() {
       {/* Body: stacked on mobile, side-by-side on desktop */}
       <div className="flex flex-col md:grid md:grid-cols-2 flex-1 md:overflow-hidden">
         {/* Generator */}
-        <div className="bg-white md:border-r border-b md:border-b-0 border-slate-200 px-4 py-6 md:px-8 md:py-8 md:h-full md:overflow-y-auto">
+        <div className="bg-white md:border-r border-slate-200 px-4 py-6 md:px-8 md:py-8 md:h-full md:overflow-y-auto">
           <div className="max-w-md mx-auto md:h-full">
             <DropZone onGenerated={setGenInfo} />
           </div>
         </div>
 
         {/* Settings Recommender */}
-        <div className="bg-[#f7f5f0] px-4 py-6 md:px-6 md:py-5 md:h-full md:overflow-y-auto">
+        <div className="bg-[#f7f5f0] border-t md:border-t-0 border-slate-200 px-4 py-6 md:px-8 md:py-5 md:h-full md:overflow-y-auto">
           <div className="max-w-md mx-auto">
             <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
           </div>
@@ -40,14 +40,14 @@ export default function Home() {
 
       {/* Feedback button */}
       <motion.div
-        className="fixed bottom-6 right-6 z-50"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50"
         initial={{ opacity: 0, scale: 0.8, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8, delay: 0.5 }}
       >
         <motion.button
           onClick={() => window.open('https://tally.so/r/b5YPre', '_blank')}
-          className="bg-[#c97f1a] text-white text-xs font-medium px-4 py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
+          className="bg-[#c97f1a] text-white text-xs font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           transition={{ type: "spring", stiffness: 400, damping: 20 }}
