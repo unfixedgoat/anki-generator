@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
+import { useAuth, useClerk, useUser, UserButton } from "@clerk/nextjs";
 
 export default function AccountChip() {
   const { isSignedIn } = useAuth();
   const { openSignIn } = useClerk();
-  const [isPro, setIsPro] = useState(false);
+  const { user } = useUser();
+  const [apiIsPro, setApiIsPro] = useState(false);
+
+  const isPro = user?.publicMetadata?.plan === "pro" || apiIsPro;
 
   useEffect(() => {
     if (!isSignedIn) return;
     fetch("/api/me")
       .then((r) => r.json())
-      .then((data) => setIsPro(!!data.isPro))
+      .then((data) => setApiIsPro(!!data.isPro))
       .catch(() => {});
   }, [isSignedIn]);
 
@@ -32,13 +35,13 @@ export default function AccountChip() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col items-center">
+      <UserButton />
       {isPro && (
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee]">
-          Pro
+        <span className="text-[9px] font-semibold px-1 py-px rounded-full border border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee] uppercase tracking-tight leading-none mt-0.5">
+          PRO
         </span>
       )}
-      <UserButton />
     </div>
   );
 }

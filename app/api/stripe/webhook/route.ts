@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { Redis } from "@upstash/redis";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
@@ -40,12 +41,24 @@ export async function POST(req: NextRequest) {
       } else {
         await redis.set(`pro:${identifier}`, "1");
       }
+      if (identifier.startsWith("user_")) {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(identifier, {
+          publicMetadata: { plan: "pro" },
+        });
+      }
     }
   } else if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
     const identifier = subscription.metadata?.identifier;
     if (identifier) {
       await redis.del(`pro:${identifier}`);
+      if (identifier.startsWith("user_")) {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(identifier, {
+          publicMetadata: { plan: null },
+        });
+      }
     }
   } else if (event.type === "charge.refunded") {
     const charge = event.data.object as Stripe.Charge;
