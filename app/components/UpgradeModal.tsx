@@ -58,60 +58,69 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
           onClick={onClose}
         >
           <motion.div
-            className="w-full max-w-sm bg-[#fffdf7] border border-[#f0c87a] rounded-2xl p-7 shadow-xl"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+            className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-xl mx-auto"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col items-center text-center gap-5">
-              <div className="w-11 h-11 rounded-full bg-[#c97f1a] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-[#fef8ee] border border-[#f0c87a] flex items-center justify-center">
                 <svg
                   width="18"
                   height="18"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="white"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  className="text-[#c97f1a]"
                 >
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
               </div>
 
               <div className="space-y-2">
-                <p className="text-[15px] font-semibold text-[#7a4f0d] font-serif leading-snug">
+                <p className="text-lg font-semibold text-[#1a2820] leading-snug">
                   {title}
                 </p>
-                <p className="text-[13px] text-slate-500 leading-relaxed">{subtitle}</p>
+                <p className="text-sm text-slate-500 text-center leading-snug">{subtitle}</p>
               </div>
 
-              <div className="flex gap-3 w-full">
-                <button
+              <div className="flex flex-col gap-2 w-full">
+                <motion.button
                   onClick={() => checkout("pro_monthly")}
                   disabled={loading !== null}
-                  className="flex-1 py-2.5 rounded-full bg-[#c97f1a] text-white text-[12px] font-medium tracking-wide text-center hover:bg-[#b5711a] transition-colors duration-150 disabled:opacity-60 disabled:cursor-default"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="w-full px-6 py-2.5 rounded-full bg-[#c97f1a] text-white text-sm font-medium disabled:opacity-60 disabled:cursor-default"
                 >
                   {loading === "pro_monthly" ? "Loading…" : "Upgrade to Pro — $6/mo"}
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={onClose}
                   disabled={loading !== null}
-                  className="flex-1 py-2.5 rounded-full border border-[#f0c87a] text-[#7a4f0d] text-[12px] font-medium hover:bg-[#fef8ee] transition-colors duration-150 disabled:opacity-40 disabled:cursor-default"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="w-full px-6 py-2.5 rounded-full bg-white text-slate-600 border border-slate-200 text-sm font-medium disabled:opacity-40 disabled:cursor-default"
                 >
                   Maybe later
-                </button>
+                </motion.button>
               </div>
 
-              <button
+              <motion.button
                 onClick={() => checkout("one_time")}
                 disabled={loading !== null}
-                className="text-[11px] text-[#7a4f0d] opacity-60 hover:opacity-100 transition-opacity duration-150 disabled:cursor-default"
+                whileHover={{ opacity: 0.7 }}
+                transition={{ duration: 0.15 }}
+                className="text-sm text-[#7a4f0d] underline underline-offset-2 disabled:cursor-default"
               >
                 {loading === "one_time" ? "Loading…" : "Just need one deck? $2 one-time →"}
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         </motion.div>

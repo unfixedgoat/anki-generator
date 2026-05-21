@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
     metadata: { identifier },
     ...(userId ? { client_reference_id: userId } : {}),
     ...(customerEmail ? { customer_email: customerEmail } : {}),
-    ...(isSubscription ? { subscription_data: { metadata: { identifier } } } : {}),
+    ...(isSubscription
+      ? { subscription_data: { metadata: { identifier } } }
+      : { payment_intent_data: { metadata: { identifier } } }),
     success_url: `https://highyield.cards?session_id={CHECKOUT_SESSION_ID}&upgraded=true`,
     cancel_url: `https://highyield.cards`,
   });
