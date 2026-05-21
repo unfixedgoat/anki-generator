@@ -12,12 +12,12 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen md:h-screen md:overflow-hidden">
       {/* Top bar */}
-      <header className="flex-shrink-0 w-full px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between">
+      <header className="flex-shrink-0 w-full px-6 py-5 border-b border-slate-200 bg-white flex items-center justify-between relative">
         <div className="flex items-center gap-2">
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
         </div>
-        <p className="hidden sm:block text-sm text-slate-400 mt-1 font-serif italic">
+        <p className="hidden sm:block absolute left-1/2 -translate-x-1/2 text-sm text-slate-400 font-serif italic pointer-events-none">
           Drop your syllabus. Get an Anki deck built around your exam date.
         </p>
         <AccountChip />

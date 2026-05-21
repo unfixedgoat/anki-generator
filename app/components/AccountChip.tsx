@@ -20,7 +20,7 @@ export default function AccountChip() {
     return (
       <button
         onClick={() => openSignIn()}
-        className="text-xs font-medium px-3 py-1 rounded-full border border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee] hover:bg-[#fdf0d5] transition-colors"
+        className="bg-[#c97f1a] text-white text-xs font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
       >
         Sign in
       </button>
