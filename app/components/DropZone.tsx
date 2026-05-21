@@ -6,6 +6,7 @@ import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
 import UpgradeModal from "./UpgradeModal";
+import { track } from "@vercel/analytics/react";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -128,6 +129,11 @@ export default function DropZone({ onGenerated }: Props) {
         clearProgressTimers();
         setLoadingStep(3);
         await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+        track("deck_downloaded", {
+          style: formData.get("style") as string,
+          density: formData.get("density") as string,
+          source: inputType,
+        });
         triggerDownload(blob, filename);
         setLoadingStep(null);
         setState("success");

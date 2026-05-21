@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const identifier = session.metadata?.identifier;
+    const identifier = session.client_reference_id ?? session.metadata?.identifier;
     if (identifier) {
       if (session.mode === "subscription") {
         await redis.set(`pro:${identifier}`, "1", { ex: PRO_TTL });

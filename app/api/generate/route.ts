@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
@@ -203,14 +204,16 @@ function sanitizeFilename(name: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const identifier = req.headers.get("x-forwarded-for") ?? "anonymous";
+  const { userId } = await auth();
+  const identifier: string | null = userId ?? req.headers.get("x-forwarded-for");
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     console.warn("Upstash env vars not set — skipping rate limit check");
     // continue without rate limiting
   } else {
     const pro = await isPro(identifier);
     if (!pro) {
-      const { success, limit, remaining, reset } = await ratelimit.limit(identifier);
+      const limitKey = identifier ?? "anonymous";
+      const { success, limit, remaining, reset } = await ratelimit.limit(limitKey);
       if (!success) {
         return NextResponse.json(
           { error: "Free limit reached", limit, remaining, reset, upgrade: "https://highyield.cards" },

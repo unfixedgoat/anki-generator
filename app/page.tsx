@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
+import AccountChip from "@/app/components/AccountChip";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
@@ -19,6 +20,7 @@ export default function Home() {
         <p className="hidden sm:block text-sm text-slate-400 mt-1 font-serif italic">
           Drop your syllabus. Get an Anki deck built around your exam date.
         </p>
+        <AccountChip />
       </header>
 
       {/* Body: stacked on mobile, side-by-side on desktop */}

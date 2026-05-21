@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 
 type Plan = "pro_monthly" | "pro_annual" | "one_time" | "one_time_deck";
@@ -19,17 +20,29 @@ export async function POST(req: NextRequest) {
   }
 
   let plan: Plan;
-  let identifier: string;
+  let bodyIdentifier: string | undefined;
   try {
     const body = await req.json();
     plan = body.plan;
-    identifier = body.identifier ?? "anonymous";
+    bodyIdentifier = body.identifier;
     if (!VALID_PLANS.includes(plan)) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
+
+  const { userId } = await auth();
+  let customerEmail: string | undefined;
+  if (userId) {
+    const user = await currentUser();
+    const primary = user?.emailAddresses?.find(
+      (e) => e.id === user.primaryEmailAddressId
+    );
+    customerEmail = primary?.emailAddress;
+  }
+
+  const identifier = userId ?? bodyIdentifier ?? "anonymous";
 
   const stripe = new Stripe(secretKey);
   const isSubscription = plan !== "one_time" && plan !== "one_time_deck";
@@ -48,6 +61,8 @@ export async function POST(req: NextRequest) {
     mode: isSubscription ? "subscription" : "payment",
     line_items: [{ price: price.id, quantity: 1 }],
     metadata: { identifier },
+    ...(userId ? { client_reference_id: userId } : {}),
+    ...(customerEmail ? { customer_email: customerEmail } : {}),
     ...(isSubscription ? { subscription_data: { metadata: { identifier } } } : {}),
     success_url: `https://highyield.cards?session_id={CHECKOUT_SESSION_ID}&upgraded=true`,
     cancel_url: `https://highyield.cards`,

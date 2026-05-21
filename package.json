@@ -10,6 +10,7 @@
     "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.3.7",
     "@google/genai": "^1.50.1",
     "@stripe/stripe-js": "^9.6.0",
     "@upstash/ratelimit": "^2.0.8",

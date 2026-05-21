@@ -1,6 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
-  const identifier = req.headers.get("x-forwarded-for") ?? "anonymous";
-  return NextResponse.json({ identifier });
+export async function GET() {
+  const { userId } = await auth();
+  if (userId) {
+    return NextResponse.json({ identifier: userId, authed: true });
+  }
+  return NextResponse.json({ identifier: null, authed: false });
 }

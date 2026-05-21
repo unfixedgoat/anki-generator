@@ -8,7 +8,8 @@ export const ratelimit = new Ratelimit({
   limiter: Ratelimit.slidingWindow(5, "30 d"),
 });
 
-export async function isPro(identifier: string): Promise<boolean> {
+export async function isPro(identifier: string | null): Promise<boolean> {
+  if (!identifier) return false;
   try {
     const val = await redis.get(`pro:${identifier}`);
     return val !== null;

@@ -2,7 +2,17 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+
+if (process.env.NODE_ENV === "development") {
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    console.warn("[clerk] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set");
+  }
+  if (!process.env.CLERK_SECRET_KEY) {
+    console.warn("[clerk] CLERK_SECRET_KEY is not set");
+  }
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -75,13 +85,15 @@ export default function RootLayout({
         <meta name="theme-color" content="#c97f1a" />
       </head>
       <body className="min-h-full flex flex-col">
-        {children}
-        <Script
-          src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-          strategy="lazyOnload"
-          id="pdfjs"
-        />
-        <Analytics />
+        <ClerkProvider>
+          {children}
+          <Script
+            src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+            strategy="lazyOnload"
+            id="pdfjs"
+          />
+          <Analytics />
+        </ClerkProvider>
       </body>
     </html>
   );
