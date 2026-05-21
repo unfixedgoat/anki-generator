@@ -529,7 +529,7 @@ export default function DropZone({ onGenerated }: Props) {
               ? "border-[#f0c87a] bg-[#fef8ee] flex flex-col items-center justify-center gap-5"
               : isError
               ? "border-red-200 bg-red-50/30 flex flex-col items-center justify-center gap-5"
-              : "border-slate-200 bg-white",
+              : "border-slate-200 bg-white flex flex-col",
           ].join(" ")}
         >
           {isBusy && StepsPanel}
@@ -544,30 +544,31 @@ export default function DropZone({ onGenerated }: Props) {
                 onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) { e.preventDefault(); processText(); } }}
                 placeholder="Paste your notes, lecture text, or study material here…"
                 className={[
-                  "absolute inset-0 w-full h-full px-5 py-4 pb-14",
+                  "flex-1 w-full px-5 pt-4 pb-2",
                   "text-sm text-slate-700 placeholder:text-slate-300",
-                  "bg-transparent resize-none focus:outline-none",
+                  "bg-transparent resize-none focus:outline-none overflow-y-auto",
                   "leading-relaxed",
                 ].join(" ")}
               />
-              <span className="hidden md:block absolute bottom-[18px] left-5 text-xs text-slate-400 pointer-events-none select-none">
-                ⌘↵ to generate
-              </span>
-              <motion.button
-                onClick={processText}
-                disabled={!rawText.trim()}
-                className={[
-                  "absolute bottom-4 right-4 z-10",
-                  "px-5 py-2 rounded-full text-[11px] font-medium tracking-widest uppercase",
-                  "bg-[#c97f1a] text-white transition-opacity duration-150",
-                  rawText.trim() ? "opacity-100" : "opacity-25 cursor-not-allowed",
-                ].join(" ")}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              >
-                Generate
-              </motion.button>
+              <div className="flex items-center shrink-0 px-5 py-3">
+                <span className="hidden md:block text-xs text-slate-400 select-none pointer-events-none">
+                  ⌘↵ to generate
+                </span>
+                <motion.button
+                  onClick={processText}
+                  disabled={!rawText.trim()}
+                  className={[
+                    "ml-auto px-5 py-2 rounded-full text-[11px] font-medium tracking-widest uppercase",
+                    "bg-[#c97f1a] text-white transition-opacity duration-150",
+                    rawText.trim() ? "opacity-100" : "opacity-25 cursor-not-allowed",
+                  ].join(" ")}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                >
+                  Generate
+                </motion.button>
+              </div>
             </>
           )}
         </div>

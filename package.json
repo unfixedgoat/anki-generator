@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts"
+    "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts",
+    "test:citations": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts --citations-only"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.7",

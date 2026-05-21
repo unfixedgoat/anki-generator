@@ -413,7 +413,147 @@ async function main(): Promise<void> {
   if (passCount < total) process.exit(1);
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+// ── Citation footer test ───────────────────────────────────────────────────
+
+const CITATION_SAMPLE_TEXT =
+  "The action potential propagates along the axon through a sequence of " +
+  "voltage-gated channel events. At rest, the membrane potential is " +
+  "approximately -70mV, maintained by the Na⁺/K⁺ ATPase pumping 3 Na⁺ out " +
+  "and 2 K⁺ in per ATP hydrolyzed. Depolarization occurs when voltage-gated " +
+  "Na⁺ channels open, allowing rapid Na⁺ influx and driving the membrane " +
+  "toward +40mV. This triggers inactivation of Na⁺ channels and opening of " +
+  "voltage-gated K⁺ channels, causing K⁺ efflux and repolarization. The " +
+  "brief hyperpolarization below -70mV — the absolute refractory period — " +
+  "occurs because K⁺ channels close slowly. Myelination by oligodendrocytes " +
+  "in the CNS (Schwann cells in the PNS) forces saltatory conduction at the " +
+  "nodes of Ranvier, increasing conduction velocity dramatically compared to " +
+  "unmyelinated fibers.";
+
+interface CitationResult {
+  density: string;
+  cardCount: number;
+  citationOk: string;
+  flagOk: string;
+  pass: boolean;
+}
+
+async function generatePasteDeck(density: Density): Promise<Buffer> {
+  const formData = new FormData();
+  formData.append("text", CITATION_SAMPLE_TEXT);
+  formData.append("style", "standard");
+  formData.append("density", density);
+  // no filename — triggers paste mode (isPaste = true) in the route
+
+  const res = await fetch(`${BASE_URL}/api/generate`, {
+    method: "POST",
+    body: formData,
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "(unreadable)");
+    throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function runCitationTest(density: Density): Promise<CitationResult> {
+  let cards: Card[];
+  try {
+    cards = await extractCards(await generatePasteDeck(density));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`FAIL: ${msg}`);
+    return { density, cardCount: 0, citationOk: "0/0", flagOk: "0/0", pass: false };
+  }
+
+  const n = cards.length;
+  let citationCount = 0;
+  let flagCount = 0;
+
+  for (const card of cards) {
+    if (card.back.includes("tally.so")) citationCount++;
+    else console.log(`    ↳ Missing tally.so on: "${card.front.slice(0, 80)}"`);
+    if (card.back.includes("⚑ flag")) flagCount++;
+  }
+
+  return {
+    density,
+    cardCount: n,
+    citationOk: `${citationCount}/${n}`,
+    flagOk: `${flagCount}/${n}`,
+    pass: citationCount === n && flagCount === n,
+  };
+}
+
+function renderCitationTable(results: CitationResult[]): void {
+  const bar = "─".repeat(57);
+  console.log("\nCITATION FOOTER TEST");
+  console.log(bar);
+  console.log(
+    "Density".padEnd(15) +
+      "Cards".padEnd(8) +
+      "Citation✓".padEnd(12) +
+      "Flag✓".padEnd(8) +
+      "Result",
+  );
+  console.log(bar);
+  for (const r of results) {
+    console.log(
+      r.density.padEnd(15) +
+        String(r.cardCount).padEnd(8) +
+        r.citationOk.padEnd(12) +
+        r.flagOk.padEnd(8) +
+        (r.pass ? "PASS" : "FAIL"),
+    );
+  }
+  console.log(bar);
+  const passing = results.filter((r) => r.pass).length;
+  console.log(`${passing}/${results.length} PASS`);
+}
+
+async function citationMain(): Promise<void> {
+  console.log("=".repeat(57));
+  console.log("Citation Footer Test Suite");
+  console.log("=".repeat(57));
+  console.log(`Endpoint: ${BASE_URL}/api/generate`);
+  console.log("-".repeat(57));
+
+  const up = await isServerUp();
+  if (!up) {
+    console.error(
+      "\n⚠  Dev server not reachable at http://localhost:3000\n" +
+        "   Start it with: npm run dev\n" +
+        "   Then re-run:  npm run test:citations\n",
+    );
+    process.exit(1);
+  }
+  console.log("Server: reachable ✓\n");
+
+  const results: CitationResult[] = [];
+  for (const density of DENSITIES) {
+    process.stdout.write(`  Testing standard / ${density} ... `);
+    const result = await runCitationTest(density);
+    results.push(result);
+    console.log(result.pass ? `PASS  (${result.cardCount} cards)` : "FAIL");
+  }
+
+  renderCitationTable(results);
+
+  if (results.some((r) => !r.pass)) process.exit(1);
+}
+
+// ── Entry point ────────────────────────────────────────────────────────────
+
+if (process.argv.includes("--citations-only")) {
+  citationMain().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+} else {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

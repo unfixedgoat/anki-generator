@@ -66,13 +66,16 @@ const DENSITY_MODIFIERS: Record<string, string> = {
     "Extract every testable fact, statistic, mechanism, and edge-case in the text. Leave nothing out.",
 };
 
-function buildSystemInstruction(styleModifier: string): string {
+function buildSystemInstruction(styleModifier: string, isPaste: boolean): string {
+  const citationInstruction = isPaste
+    ? `- "citation"    : string  — use the value "Pasted text" for every card. Do not quote or echo the source sentence.`
+    : `- "citation"    : string  — short reference to where in the source this fact appears (e.g. "Section 3.2")`;
   return `You are an expert Anki flashcard author. Produce a JSON array of flashcard objects from the document text provided. Each object must have exactly these fields:
 
 - "front"       : string  — the question or prompt side of the card
 - "back"        : string  — the answer or explanation side of the card
 - "card_type"   : string  — one of: "basic", "cloze", "definition", "process", "comparison"
-- "citation"    : string  — short reference to where in the source this fact appears (e.g. "Section 3.2")
+${citationInstruction}
 - "visual_type" : string  — OPTIONAL. One of: "mermaid", "quickchart", "wikimedia", or "none".
   Ask yourself: would a textbook include a figure here? If yes, pick the right type below.
   Use "wikimedia" when the concept has a real-world referent that Wikipedia would illustrate with a photograph or diagram — regardless of subject. This includes: any named structure, organ, organism, apparatus, instrument, device, cell type, molecule, compound, geographic feature, historical artifact, mathematical object, or physical system. If a student would Google image search it to understand it, use "wikimedia". Examples span all fields: a neuron synapse, the amygdala, a galvanic cell, a DNA double helix, a supply-demand curve, a Venn diagram, a geometric solid, a balance sheet layout, a neurotransmitter receptor, an action potential trace.
@@ -233,6 +236,7 @@ export async function POST(req: NextRequest) {
   let densityModifier: string;
   let densityKey = "high-yield";
   let styleModifier: string = STYLE_MODIFIERS["standard"];
+  let isPaste = false;
 
   try {
     const formData = await req.formData();
@@ -259,7 +263,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const baseName = (formData.get("filename") as string | null)?.replace(/\.pdf$/i, "") || "pasted_text";
+    const filenameFromForm = formData.get("filename") as string | null;
+    isPaste = !filenameFromForm;
+    const baseName = filenameFromForm?.replace(/\.pdf$/i, "") || "pasted_text";
     const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
     deckName = `${baseName} ${ts}`;
   } catch {
@@ -273,7 +279,7 @@ export async function POST(req: NextRequest) {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       config: {
-        systemInstruction: buildSystemInstruction(styleModifier),
+        systemInstruction: buildSystemInstruction(styleModifier, isPaste),
         maxOutputTokens: 8192,
         temperature: 0.4,
       },
@@ -302,6 +308,28 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: `Visual enrichment failed: ${message}` }, { status: 500 });
   }
+
+  cards = cards.map((card) => {
+    if (card.back == null) return card;
+    const rawCitation = (card as { citation?: unknown }).citation;
+    const citationStr = typeof rawCitation === "string" ? rawCitation.trim() : "";
+    const cleanFront = card.front.replace(/<[^>]*>/g, "");
+    const encodedFront = encodeURIComponent(cleanFront.slice(0, 100));
+    const flagLink =
+      `<a href="https://tally.so/r/NpbkBW?card=${encodedFront}"` +
+      ` style="font-size:10px;color:#c97f1a;text-decoration:none;font-family:monospace;">` +
+      `⚑ flag</a>`;
+    const showCitation = citationStr && citationStr !== "Pasted text";
+    const footer = showCitation
+      ? `<div style="margin-top:20px;padding-top:8px;border-top:1px solid #f0f0f0;opacity:0.35;display:flex;justify-content:space-between;align-items:center;">` +
+        `<span style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:0.02em;">${citationStr}</span>` +
+        flagLink +
+        `</div>`
+      : `<div style="margin-top:20px;padding-top:8px;border-top:1px solid #f0f0f0;opacity:0.35;display:flex;justify-content:flex-end;align-items:center;">` +
+        flagLink +
+        `</div>`;
+    return { ...card, back: card.back + footer };
+  });
 
   if (cards.length === 0) {
     return NextResponse.json({ error: "No flashcards could be generated from this document" }, { status: 422 });
