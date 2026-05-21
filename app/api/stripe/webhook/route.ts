@@ -1,3 +1,4 @@
+// Stripe dashboard webhook events: checkout.session.completed, customer.subscription.deleted, charge.refunded
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { Redis } from "@upstash/redis";
@@ -43,6 +44,12 @@ export async function POST(req: NextRequest) {
   } else if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object as Stripe.Subscription;
     const identifier = subscription.metadata?.identifier;
+    if (identifier) {
+      await redis.del(`pro:${identifier}`);
+    }
+  } else if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const identifier = charge.metadata?.identifier;
     if (identifier) {
       await redis.del(`pro:${identifier}`);
     }

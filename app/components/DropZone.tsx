@@ -177,6 +177,12 @@ export default function DropZone({ onGenerated }: Props) {
         return;
       }
 
+      if (file.size > 30 * 1024 * 1024) {
+        setErrorMsg("PDF too large (max 30 MB). Try splitting the document.");
+        setState("error");
+        return;
+      }
+
       setFileName(file.name);
       setErrorMsg(null);
       setState("extracting");

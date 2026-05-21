@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
+import { auth } from "@clerk/nextjs/server";
+import { ratelimit, isPro } from "@/app/lib/ratelimit";
 import { type AnkiPreset } from "@/app/lib/settingsRecommender";
 
 export const maxDuration = 30;
@@ -13,6 +15,26 @@ interface SqlDatabase {
 
 interface SqlModule {
   Database: new (data?: Uint8Array) => SqlDatabase;
+}
+
+function isValidPreset(p: unknown): p is AnkiPreset {
+  if (typeof p !== "object" || p === null) return false;
+  const r = p as Record<string, unknown>;
+  if (typeof r.new_cards_per_day !== "number" || !isFinite(r.new_cards_per_day)) return false;
+  if (typeof r.maximum_reviews_per_day !== "number" || !isFinite(r.maximum_reviews_per_day)) return false;
+  if (typeof r.learning_steps !== "string") return false;
+  if (typeof r.graduating_interval !== "number" || !isFinite(r.graduating_interval)) return false;
+  if (typeof r.easy_interval !== "number" || !isFinite(r.easy_interval)) return false;
+  if (r.insertion_order !== "sequential" && r.insertion_order !== "random") return false;
+  if (typeof r.relearning_steps !== "string") return false;
+  if (typeof r.minimum_interval !== "number" || !isFinite(r.minimum_interval)) return false;
+  if (typeof r.leech_threshold !== "number" || !isFinite(r.leech_threshold)) return false;
+  if (r.leech_action !== "tag_only" && r.leech_action !== "suspend") return false;
+  if (r.fsrs_enabled !== true) return false;
+  if (typeof r.desired_retention !== "number" || !isFinite(r.desired_retention) ||
+      r.desired_retention < 0 || r.desired_retention > 1) return false;
+  if (typeof r.maximum_interval !== "number" || !isFinite(r.maximum_interval)) return false;
+  return true;
 }
 
 function parseStepsToMinutes(steps: string): number[] {
@@ -73,6 +95,29 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
 }
 
 export async function POST(req: NextRequest) {
+  // Guard 1 — file size: reject before reading body if Content-Length is missing or > 50 MB.
+  const contentLengthHeader = req.headers.get("content-length");
+  if (!contentLengthHeader || Number(contentLengthHeader) > 52_428_800) {
+    return NextResponse.json({ error: "Request too large or missing Content-Length" }, { status: 413 });
+  }
+
+  // Guard 2 — rate limiting for anonymous callers (authenticated users pass freely).
+  const { userId } = await auth();
+  if (!userId) {
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+    }
+    const forwarded = req.headers.get("x-forwarded-for") ?? "";
+    const realIp = forwarded.split(",").at(-1)?.trim() || "anonymous";
+    const pro = await isPro(realIp);
+    if (!pro) {
+      const { success } = await ratelimit.limit(realIp);
+      if (!success) {
+        return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+      }
+    }
+  }
+
   let apkgBytes: Uint8Array;
   let preset: AnkiPreset;
 
@@ -84,7 +129,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing apkg or preset" }, { status: 400 });
     }
     apkgBytes = new Uint8Array(await apkgFile.arrayBuffer());
-    preset = JSON.parse(presetJson) as AnkiPreset;
+    // Guard 3 — preset field validation before any file processing.
+    const parsedPreset: unknown = JSON.parse(presetJson);
+    if (!isValidPreset(parsedPreset)) {
+      return NextResponse.json({ error: "Invalid preset fields" }, { status: 400 });
+    }
+    preset = parsedPreset;
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -144,8 +194,8 @@ export async function POST(req: NextRequest) {
     const outBuffer = await newZip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
     patchedBytes = outBuffer;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Preset embed failed: ${message}` }, { status: 500 });
+    console.error("[embed-preset] Processing error:", err);
+    return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
 
   return new Response(patchedBytes.buffer as ArrayBuffer, {

@@ -20,11 +20,9 @@ export async function POST(req: NextRequest) {
   }
 
   let plan: Plan;
-  let bodyIdentifier: string | undefined;
   try {
     const body = await req.json();
     plan = body.plan;
-    bodyIdentifier = body.identifier;
     if (!VALID_PLANS.includes(plan)) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
@@ -42,7 +40,9 @@ export async function POST(req: NextRequest) {
     customerEmail = primary?.emailAddress;
   }
 
-  const identifier = userId ?? bodyIdentifier ?? "anonymous";
+  const forwarded = req.headers.get("x-forwarded-for") ?? "";
+  const realIp = forwarded.split(",").at(-1)?.trim() || "anonymous";
+  const identifier = userId ?? realIp;
 
   const stripe = new Stripe(secretKey);
   const isSubscription = plan !== "one_time" && plan !== "one_time_deck";

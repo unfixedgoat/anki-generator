@@ -202,16 +202,26 @@ function extractJson(raw: string): RawCard[] {
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-z0-9_\-\s]/gi, "").trim().replace(/\s+/g, "_") || "anki_deck";
 }
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  const identifier: string | null = userId ?? req.headers.get("x-forwarded-for");
+  const forwarded = req.headers.get("x-forwarded-for") ?? "";
+  const realIp = forwarded.split(",").at(-1)?.trim() || null;
+  const identifier: string | null = userId ?? realIp;
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.warn("Upstash env vars not set — skipping rate limit check");
-    // continue without rate limiting
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   } else {
     const pro = await isPro(identifier);
     if (!pro) {
@@ -297,16 +307,16 @@ export async function POST(req: NextRequest) {
     const text = response.text ?? "";
     rawCards = extractJson(text);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Gemini request failed: ${message}` }, { status: 502 });
+    console.error("[generate] Gemini error:", err);
+    return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 502 });
   }
 
   let cards: Awaited<ReturnType<typeof enrichCards>>;
   try {
     cards = await enrichCards(rawCards);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Visual enrichment failed: ${message}` }, { status: 500 });
+    console.error("[generate] Enrichment error:", err);
+    return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 500 });
   }
 
   cards = cards.map((card) => {
@@ -322,7 +332,7 @@ export async function POST(req: NextRequest) {
     const showCitation = citationStr && citationStr !== "Pasted text";
     const footer = showCitation
       ? `<div style="margin-top:20px;padding-top:8px;border-top:1px solid #f0f0f0;opacity:0.35;display:flex;justify-content:space-between;align-items:center;">` +
-        `<span style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:0.02em;">${citationStr}</span>` +
+        `<span style="font-size:10px;color:#6b7280;font-family:monospace;letter-spacing:0.02em;">${escapeHtml(citationStr)}</span>` +
         flagLink +
         `</div>`
       : `<div style="margin-top:20px;padding-top:8px;border-top:1px solid #f0f0f0;opacity:0.35;display:flex;justify-content:flex-end;align-items:center;">` +
@@ -339,8 +349,8 @@ export async function POST(req: NextRequest) {
   try {
     apkgBuffer = await buildApkg(deckName, cards);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Anki export failed: ${message}` }, { status: 500 });
+    console.error("[generate] Export error:", err);
+    return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
 
   const safeFilename = sanitizeFilename(deckName);

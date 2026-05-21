@@ -17,8 +17,7 @@ interface PdfPage {
   getTextContent(): Promise<{ items: Array<{ str?: string }> }>;
 }
 
-const WORKER_URL =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const WORKER_URL = "/pdf.worker.min.js";
 
 const CMAP_URL =
   "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/";

@@ -89,6 +89,8 @@ export default function RootLayout({
           {children}
           <Script
             src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+            integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"
+            crossOrigin="anonymous"
             strategy="lazyOnload"
             id="pdfjs"
           />
