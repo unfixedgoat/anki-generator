@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 
 export default function AccountChip() {
@@ -18,12 +19,15 @@ export default function AccountChip() {
 
   if (!isSignedIn) {
     return (
-      <button
+      <motion.button
         onClick={() => openSignIn()}
         className="bg-[#c97f1a] text-white text-xs font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
         Sign in
-      </button>
+      </motion.button>
     );
   }
 
