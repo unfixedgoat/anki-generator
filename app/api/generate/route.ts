@@ -4,6 +4,8 @@ import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
 import { ratelimit, isPro } from "@/app/lib/ratelimit";
+import { getPostHogClient } from "@/app/lib/posthog-server";
+import { trace, context } from "@opentelemetry/api";
 
 export const maxDuration = 60;
 
@@ -286,24 +288,37 @@ export async function POST(req: NextRequest) {
   try {
     const ai = new GoogleGenAI({ apiKey });
     const target = cardTarget(documentText, densityKey);
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-        maxOutputTokens: 8192,
-        temperature: 0.4,
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
-            },
-          ],
-        },
-      ],
+    const tracer = trace.getTracer("highyield-cards");
+    const span = tracer.startSpan("deck_generation", {
+      attributes: { "posthog.distinct_id": identifier ?? "anonymous" },
     });
+    let response: Awaited<ReturnType<typeof ai.models.generateContent>>;
+    try {
+      response = await context.with(
+        trace.setSpan(context.active(), span),
+        () =>
+          ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            config: {
+              systemInstruction: buildSystemInstruction(styleModifier, isPaste),
+              maxOutputTokens: 8192,
+              temperature: 0.4,
+            },
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
+                  },
+                ],
+              },
+            ],
+          })
+      );
+    } finally {
+      span.end();
+    }
     const text = response.text ?? "";
     rawCards = extractJson(text);
   } catch (err) {
@@ -352,6 +367,20 @@ export async function POST(req: NextRequest) {
     console.error("[generate] Export error:", err);
     return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
+
+  const isProUser = await isPro(identifier);
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: identifier ?? "anonymous",
+    event: "deck_generated",
+    properties: {
+      card_count: cards.length,
+      density: densityKey,
+      source: isPaste ? "text" : "pdf",
+      is_pro: isProUser,
+    },
+  });
+  await posthog.shutdown();
 
   const safeFilename = sanitizeFilename(deckName);
   return new Response(new Uint8Array(apkgBuffer), {

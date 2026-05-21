@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import posthog from "posthog-js";
 
 type Reason = "limit" | "characters";
 
@@ -28,6 +29,7 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
   const [loading, setLoading] = useState<string | null>(null);
 
   async function checkout(plan: string) {
+    posthog.capture("checkout_initiated", { plan, reason });
     setLoading(plan);
     try {
       const res = await fetch("/api/stripe/checkout", {
@@ -101,7 +103,7 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
                   {loading === "pro_monthly" ? "Loading…" : "Upgrade to Pro — $6/mo"}
                 </motion.button>
                 <motion.button
-                  onClick={onClose}
+                  onClick={() => { posthog.capture("upgrade_modal_dismissed", { reason }); onClose(); }}
                   disabled={loading !== null}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}

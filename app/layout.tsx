@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { ClerkProvider } from "@clerk/nextjs";
+import PostHogProvider from "./components/PostHogProvider";
 import "./globals.css";
 
 if (process.env.NODE_ENV === "development") {
@@ -85,6 +86,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#c97f1a" />
       </head>
       <body className="min-h-full flex flex-col">
+        <PostHogProvider>
         <ClerkProvider>
           {children}
           <Script
@@ -96,6 +98,7 @@ export default function RootLayout({
           />
           <Analytics />
         </ClerkProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

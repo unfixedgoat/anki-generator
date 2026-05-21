@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Stripe from "stripe";
+import { getPostHogClient } from "@/app/lib/posthog-server";
 
 type Plan = "pro_monthly" | "pro_annual" | "one_time" | "one_time_deck";
 
@@ -69,6 +70,17 @@ export async function POST(req: NextRequest) {
     success_url: `https://highyield.cards?session_id={CHECKOUT_SESSION_ID}&upgraded=true`,
     cancel_url: `https://highyield.cards`,
   });
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: identifier,
+    event: "checkout_session_created",
+    properties: {
+      plan,
+      mode: isSubscription ? "subscription" : "payment",
+    },
+  });
+  await posthog.shutdown();
 
   return NextResponse.json({ url: session.url });
 }

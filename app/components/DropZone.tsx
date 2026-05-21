@@ -6,7 +6,7 @@ import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
 import UpgradeModal from "./UpgradeModal";
-import { track } from "@vercel/analytics/react";
+import posthog from "posthog-js";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -106,22 +106,39 @@ export default function DropZone({ onGenerated }: Props) {
   }, [clearProgressTimers]);
 
   const switchMode = useCallback((mode: InputType) => {
+    posthog.capture("input_mode_switched", { mode });
     setInputType(mode);
     setState("idle");
     setFileName(null);
     setErrorMsg(null);
   }, []);
 
+  const handleDensityChange = useCallback((val: Density) => {
+    posthog.capture("card_density_changed", { density: val });
+    setDensity(val);
+  }, []);
+
+  const handleStyleChange = useCallback((val: CardStyle) => {
+    posthog.capture("card_style_changed", { style: val });
+    setCardStyle(val);
+  }, []);
+
   const cancel = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    posthog.capture("generation_cancelled", { source: inputType });
     abortRef.current?.abort();
-  }, []);
+  }, [inputType]);
 
   const handleApiResult = useCallback(
     async (formData: FormData, label: string, sourceText: string) => {
       setFileName(label);
       setErrorMsg(null);
       setState("loading");
+      posthog.capture("generation_started", {
+        style: formData.get("style") as string,
+        density: formData.get("density") as string,
+        source: inputType,
+      });
       const controller = new AbortController();
       abortRef.current = controller;
       try {
@@ -129,7 +146,7 @@ export default function DropZone({ onGenerated }: Props) {
         clearProgressTimers();
         setLoadingStep(3);
         await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-        track("deck_downloaded", {
+        posthog.capture("deck_downloaded", {
           style: formData.get("style") as string,
           density: formData.get("density") as string,
           source: inputType,
@@ -155,11 +172,17 @@ export default function DropZone({ onGenerated }: Props) {
           return;
         }
         if (err instanceof RateLimitError) {
+          posthog.capture("rate_limit_hit", { source: inputType });
+          posthog.capture("upgrade_modal_opened", { reason: "limit", source: inputType });
           setState("idle");
           setFileName(null);
           setUpgradeReason("limit");
           return;
         }
+        posthog.capture("generation_failed", {
+          error: err instanceof Error ? err.message : "Unknown error",
+          source: inputType,
+        });
         setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
         setState("error");
       } finally {
@@ -213,6 +236,7 @@ export default function DropZone({ onGenerated }: Props) {
       if (text.length > 50_000) {
         clearProgressTimers();
         setLoadingStep(null);
+        posthog.capture("upgrade_modal_opened", { reason: "characters", source: "pdf" });
         setState("idle");
         setFileName(null);
         setUpgradeReason("characters");
@@ -235,6 +259,7 @@ export default function DropZone({ onGenerated }: Props) {
     const text = rawText.trim();
     if (!text) return;
     if (text.length > 50_000) {
+      posthog.capture("upgrade_modal_opened", { reason: "characters", source: "text" });
       setUpgradeReason("characters");
       return;
     }
@@ -440,8 +465,8 @@ export default function DropZone({ onGenerated }: Props) {
         </button>
       </div>
 
-      <DensityToggle value={density} onChange={setDensity} disabled={isBusy} />
-      <StyleToggle value={cardStyle} onChange={setCardStyle} disabled={isBusy} />
+      <DensityToggle value={density} onChange={handleDensityChange} disabled={isBusy} />
+      <StyleToggle value={cardStyle} onChange={handleStyleChange} disabled={isBusy} />
 
       {/* Custom prompt box */}
       {cardStyle === "custom" && (
