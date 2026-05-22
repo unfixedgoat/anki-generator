@@ -134,12 +134,14 @@ function WarningCard({
 
 function PresetDisplay({
   preset,
+  useFsrs,
   apkgBlob,
   genInfo,
   onRegenerate,
   isRegenerating,
 }: {
   preset: AnkiPreset;
+  useFsrs: boolean;
   apkgBlob: Blob | null;
   genInfo: GenerationInfo | null;
   onRegenerate: (density: string) => void;
@@ -190,12 +192,23 @@ function PresetDisplay({
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      {/* Summary bar */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* FSRS disclaimer — positioned above everything else */}
+      {useFsrs && (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            <span className="font-semibold text-slate-600">Starting defaults for new decks.</span>{" "}
+            Once you have ~1,000 reviews, run{" "}
+            <span className="font-medium">FSRS Optimize</span> and{" "}
+            <span className="font-medium">Compute Minimum Recommended Retention</span> in Deck Options — those use your personal data and override this tool&apos;s retention suggestion.
+          </p>
+        </div>
+      )}
+
+      {/* Summary bar — new cards/day + finish date only (review load is FSRS's job) */}
+      <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "min / day",      val: preset.estimated_daily_minutes, amber: false },
-          { label: "reviews / day",  val: preset.estimated_daily_reviews, amber: false },
-          { label: "new cards done", val: finishLabel,                    amber: true  },
+          { label: "new cards / day", val: preset.estimated_daily_new_cards, amber: false },
+          { label: "new cards done",  val: finishLabel,                       amber: true  },
         ].map(({ label, val, amber }) => (
           <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-1.5 text-center">
             <p className={["text-[18px] font-semibold leading-none", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
@@ -203,6 +216,15 @@ function PresetDisplay({
           </div>
         ))}
       </div>
+
+      {/* FSRS simulator nudge */}
+      {useFsrs && (
+        <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+          Review load grows over time. For an accurate forecast, use{" "}
+          <span className="font-medium text-slate-500">Deck Options → FSRS → Workload</span>{" "}
+          after ~1,000 reviews.
+        </p>
+      )}
 
       {/* Warnings + remediation */}
       {preset.warnings.length > 0 && (
@@ -234,8 +256,12 @@ function PresetDisplay({
 
         <Section title="New Cards">
           <Field label="Learning steps"        value={preset.learning_steps}                      rationale={rationaleFor("learning_steps")} />
-          <Field label="Graduating interval"   value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
-          <Field label="Easy interval"         value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
+          {!useFsrs && (
+            <Field label="Graduating interval" value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
+          )}
+          {!useFsrs && (
+            <Field label="Easy interval"       value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
+          )}
           <Field label="Insertion order"       value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
         </Section>
 
@@ -296,7 +322,8 @@ interface Props {
 }
 
 export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Props) {
-  const [daysUntilExam, setDaysUntilExam]       = useState("");
+  const [useFsrs, setUseFsrs]                    = useState(true);
+  const [daysUntilExam, setDaysUntilExam]        = useState("");
   const [goal, setGoal]                          = useState<GoalProfile>("balanced");
   const [budget, setBudget]                      = useState("");
   const [difficulty, setDifficulty]              = useState<DifficultyAssessment>("medium");
@@ -424,13 +451,49 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           Settings Recommender
         </h2>
         <p className="text-[11px] text-slate-400 tracking-wide">
-          Enter your deck size and study window to get optimal Anki settings
+          Starting defaults for new decks — for personalized tuning, use FSRS Optimize after ~1,000 reviews
         </p>
       </div>
 
       {/* Full inputs — visible when not collapsed */}
       {!inputsCollapsed && (
         <div key="inputs" className="w-full space-y-1.5 animate-fade-in">
+          {/* FSRS toggle — first question, gates the entire output */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
+              Using FSRS?
+            </label>
+            <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
+              {([{ value: true, label: "Yes — FSRS" }, { value: false, label: "No — SM-2" }] as { value: boolean; label: string }[]).map(({ value, label }) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setUseFsrs(value)}
+                  className={[
+                    "relative flex-1 py-[7px] rounded-full text-[10px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                    useFsrs === value
+                      ? "text-[#7a4f0d] font-medium"
+                      : "text-slate-400 hover:text-slate-600",
+                  ].join(" ")}
+                >
+                  {useFsrs === value && (
+                    <motion.div
+                      layoutId="fsrs-active-pill"
+                      className="absolute inset-0 bg-white rounded-full shadow-sm"
+                      transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8 }}
+                    />
+                  )}
+                  <span className="relative z-10">{label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 text-center">
+              {useFsrs
+                ? "Modern algorithm — enabled by default in new Anki profiles"
+                : "Legacy SM-2 algorithm — all classic settings apply"}
+            </p>
+          </div>
+
           {/* Card count */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
@@ -548,10 +611,10 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       {inputsCollapsed && (
         <div key="pills" className="w-full flex items-stretch gap-2 animate-fade-in">
           {([
+            { label: "FSRS",       value: useFsrs ? "On" : "Off" },
             { label: "Cards",      value: String(cardCount ?? "—") },
             { label: "Days",       value: daysUntilExam || "—" },
             { label: "Goal",       value: GOAL_OPTIONS.find((o) => o.value === goal)?.label ?? goal },
-            { label: "Difficulty", value: DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty },
           ] as { label: string; value: string }[]).map(({ label, value }) => (
             <div
               key={label}
@@ -601,6 +664,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         <div ref={presetOutputRef} tabIndex={-1} aria-live="polite" className="mt-2 w-full animate-fade-up outline-none">
           <PresetDisplay
             preset={preset}
+            useFsrs={useFsrs}
             apkgBlob={apkgBlob}
             genInfo={activeInfo}
             onRegenerate={handleRegenerate}

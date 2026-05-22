@@ -37,9 +37,7 @@ export interface AnkiPreset {
   desired_retention: number;
   fsrs_enabled: true;
   maximum_interval: number;
-  estimated_daily_minutes: number;
   estimated_daily_new_cards: number;
-  estimated_daily_reviews: number;
   estimated_finish_date: string | null;
   warnings: Warning[];
   rationale: RationaleItem[];
@@ -74,32 +72,39 @@ export function densityToIntensity(density: string): IntensityMode {
 }
 
 function lookupRetention(days: number | null, goal: GoalProfile): number {
+  // Cram always uses 0.80 — aggressive learning steps handle intra-day retention;
+  // high DR creates massive FSRS review queues that compete with new card intake.
+  if (goal === "cram") return 0.80;
+
   if (days === null || days > 180) {
-    return goal === "long_term" ? 0.80 : 0.85;
+    // No deadline or very long horizon — use goal-based starting targets per FSRS guidance.
+    // "Long-term" intentionally lower: FSRS research shows 0.85 is more efficient than 0.90+
+    // for permanent retention because it wastes fewer reviews on already-stable cards.
+    if (goal === "exam_then_retain") return 0.92;
+    if (goal === "balanced") return 0.90;
+    return 0.85; // long_term
   }
-  if (days <= 7) return 0.97;
+  if (days <= 7) return 0.90;
   if (days <= 14) {
-    return goal === "cram" || goal === "exam_then_retain" ? 0.95 : 0.92;
+    return goal === "exam_then_retain" ? 0.92 : 0.90;
   }
   if (days <= 30) {
-    if (goal === "cram") return 0.93;
     if (goal === "exam_then_retain") return 0.92;
     if (goal === "balanced") return 0.90;
     return 0.88;
   }
   if (days <= 90) {
-    if (goal === "cram" || goal === "exam_then_retain") return 0.90;
+    if (goal === "exam_then_retain") return 0.90;
     if (goal === "balanced") return 0.88;
     return 0.85;
   }
   // 91–180
-  if (goal === "cram" || goal === "exam_then_retain") return 0.88;
+  if (goal === "exam_then_retain") return 0.88;
   if (goal === "balanced") return 0.85;
-  return 0.82;
+  return 0.83; // long_term with 91–180 day deadline
 }
 
 const MINS_PER_NEW = 0.4;
-const MINS_PER_REVIEW = 0.15;
 
 function computeRemediation(
   input: RecommenderInput,
@@ -191,12 +196,13 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
   // ── Step 1 — desired_retention ──────────────────────────────────────────────
   const desired_retention = lookupRetention(days_until_exam, goal);
   const pct = (desired_retention * 100).toFixed(0);
+  const fsrsNote = "FSRS can compute a personalized target after ~1,000 reviews — use that instead when available.";
   if (days_until_exam === null) {
-    rationale.push({ field: "desired_retention", reason: `No exam deadline — optimizing for long-term efficiency at ${pct}% retention.` });
+    rationale.push({ field: "desired_retention", reason: `No exam deadline — ${pct}% is the starting target for long-term efficiency. ${fsrsNote}` });
   } else if (days_until_exam <= 14) {
-    rationale.push({ field: "desired_retention", reason: `Exam in ${days_until_exam} days — ${pct}% retention minimizes forgetting before you can review again.` });
+    rationale.push({ field: "desired_retention", reason: `Exam in ${days_until_exam} days — ${pct}% starting target. ${fsrsNote}` });
   } else {
-    rationale.push({ field: "desired_retention", reason: `${pct}% is the workload sweet spot for a ${days_until_exam}-day horizon with a ${goal.replace("_", " ")} goal.` });
+    rationale.push({ field: "desired_retention", reason: `${pct}% starting target for a ${days_until_exam}-day horizon with a ${goal.replace("_", " ")} goal. ${fsrsNote}` });
   }
 
   // ── Step 2 — new_cards_per_day, maximum_reviews_per_day ────────────────────
@@ -345,15 +351,11 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     rationale.push({ field: "maximum_interval", reason: `36500 days (100 years) — FSRS schedules to the optimal interval naturally.` });
   }
 
-  // ── Step 8 — estimates (closed-form) ──────────────────────────────────────
-  const learningReviewsPerCard = desired_retention >= 0.93 ? 5 : desired_retention >= 0.88 ? 4 : 3;
-  const forgettingRate = 1 - desired_retention;
-  const estimated_daily_reviews = Math.round(
-    remaining * forgettingRate + estNewPerDay * learningReviewsPerCard
-  );
+  // ── Step 8 — estimates ────────────────────────────────────────────────────
+  // Only the introduction pace is accurate for a new deck; FSRS's review load
+  // depends on personal memory parameters we don't have. Use FSRS Simulator
+  // (Deck Options → FSRS → Workload) after ~1,000 reviews for a real projection.
   const estimated_daily_new_cards = estNewPerDay;
-  const rawMinutes = estNewPerDay * MINS_PER_NEW + estimated_daily_reviews * MINS_PER_REVIEW;
-  const estimated_daily_minutes = Math.round(rawMinutes * 10) / 10;
 
   let estimated_finish_date: string | null = null;
   if (remaining > 0 && estNewPerDay > 0) {
@@ -380,15 +382,6 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     }
   }
 
-  if (!isCramMode && daily_minutes_budget && estimated_daily_minutes > daily_minutes_budget * 1.2) {
-    const lowerRet = ((desired_retention - 0.03) * 100).toFixed(0);
-    warnings.push({
-      severity: "warning",
-      code: "budget_exceeded",
-      message: `You'll average ~${estimated_daily_minutes.toFixed(0)} min/day, exceeding your ${daily_minutes_budget} min budget. Options: lower retention to ${lowerRet}% or reduce new cards/day.`,
-    });
-  }
-
   return {
     new_cards_per_day,
     maximum_reviews_per_day,
@@ -405,9 +398,7 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     desired_retention,
     fsrs_enabled: true,
     maximum_interval,
-    estimated_daily_minutes,
     estimated_daily_new_cards,
-    estimated_daily_reviews,
     estimated_finish_date,
     warnings,
     rationale,
