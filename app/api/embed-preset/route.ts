@@ -48,6 +48,16 @@ function parseStepsToMinutes(steps: string): number[] {
 }
 
 function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, unknown> {
+  // new.ints = [graduating_interval, easy_interval, legacy_easy_interval].
+  // When FSRS is enabled, Anki ignores these for scheduling but still stores and
+  // DISPLAYS them in the deck options UI — writing mode-specific values (e.g.
+  // easy_interval=2 from cram mode) would show misleading numbers that don't
+  // correspond to anything the user configured. Use Anki's neutral defaults instead.
+  // For SM-2 (fsrs_enabled=false) the values are load-bearing and must come from the preset.
+  const smInts = preset.fsrs_enabled
+    ? [1, 4, 7]
+    : [preset.graduating_interval, preset.easy_interval, 7];
+
   return {
     id: configId,
     name: "highyield.cards",
@@ -59,7 +69,9 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
     replayq: true,
     new: {
       delays: parseStepsToMinutes(preset.learning_steps),
-      ints: [preset.graduating_interval, preset.easy_interval, 7],
+      ints: smInts,
+      // initialFactor (SM-2 starting ease) and the rev SM-2 multipliers below are
+      // at Anki's own defaults and are ignored by FSRS, so they need no branching.
       initialFactor: 2500,
       order: preset.insertion_order === "sequential" ? 1 : 0,
       perDay: preset.new_cards_per_day,
@@ -67,15 +79,15 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
     },
     rev: {
       perDay: preset.maximum_reviews_per_day,
-      ease4: 1.3,
-      ivlFct: 1.0,
+      ease4: 1.3,     // SM-2 easy bonus — ignored by FSRS
+      ivlFct: 1.0,    // SM-2 interval modifier — ignored by FSRS
       maxIvl: preset.maximum_interval,
       bury: false,
-      hardFactor: 1.2,
+      hardFactor: 1.2, // SM-2 hard multiplier — ignored by FSRS
     },
     lapse: {
       delays: parseStepsToMinutes(preset.relearning_steps),
-      mult: 0.0,
+      mult: 0.0,       // SM-2 new-interval percentage — ignored by FSRS
       minInt: preset.minimum_interval,
       leechFails: preset.leech_threshold,
       leechAction: preset.leech_action === "suspend" ? 0 : 1,
@@ -88,9 +100,13 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
     newSortOrder: 0,
     newGatherPriority: 0,
     buryInterdayLearning: false,
-    fsrsEnabled: true,
+    // FSRS is a PROFILE-level setting in Anki (Preferences → Review → FSRS).
+    // This dconf field has no effect — it cannot enable FSRS for the user.
+    // desiredRetention IS read per-deck-config by Anki once FSRS is enabled at
+    // the profile level, so that field is still meaningful to write here.
+    fsrsEnabled: preset.fsrs_enabled,
     desiredRetention: preset.desired_retention,
-    fsrsParams5: [], // empty → Anki uses default FSRS-5 weights
+    fsrsParams5: [], // empty → Anki uses default FSRS weights
   };
 }
 
