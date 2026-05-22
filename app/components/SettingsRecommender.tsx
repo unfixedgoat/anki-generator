@@ -272,11 +272,13 @@ function PresetDisplay({
           <Field label="Leech action"          value={preset.leech_action === "tag_only" ? "Tag only" : "Suspend"} rationale={rationaleFor("leech_action")} />
         </Section>
 
-        <Section title="FSRS">
-          <Field label="FSRS enabled"          value={true} />
-          <Field label="Desired retention"     value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
-          <Field label="Max interval"          value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
-        </Section>
+        {useFsrs && (
+          <Section title="FSRS">
+            <Field label="FSRS enabled"      value={true} />
+            <Field label="Desired retention" value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
+            <Field label="Max interval"      value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
+          </Section>
+        )}
       </div>
 
       {/* Download actions */}
