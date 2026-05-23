@@ -162,7 +162,7 @@ export async function buildApkg(deckName: string, cards: AnkiCard[]): Promise<Bu
   db.close();
 
   const zip = new JSZip();
-  zip.file("collection.anki2", Buffer.from(dbBinary));
+  zip.file("collection.anki21b", Buffer.from(dbBinary));
   zip.file("media", "{}");
 
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }) as Promise<Buffer>;

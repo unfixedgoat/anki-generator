@@ -205,8 +205,11 @@ export async function POST(req: NextRequest) {
     for (const [deckId, deck] of Object.entries(decks)) {
       if (deckId !== "1" && deck["name"] !== "Default") {
         deck["conf"] = typeof deck["conf"] === "string" ? String(newConfigId) : newConfigId;
+        console.error("[embed-preset] Deck conf field:", JSON.stringify(deck["conf"]), "newConfigId:", newConfigId);
       }
     }
+
+    console.error("[embed-preset] Writing dconf:", JSON.stringify(dconf));
 
     // Write back
     db.run("UPDATE col SET dconf = :dconf, decks = :decks WHERE id = 1", {
@@ -228,6 +231,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    console.error("[embed-preset] Zip files:", Object.keys(newZip.files));
     const outBuffer = await newZip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
     patchedBytes = outBuffer;
   } catch (err) {
