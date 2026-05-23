@@ -180,7 +180,17 @@ export async function POST(req: NextRequest) {
     const dconf = JSON.parse(dconfJson) as Record<string, unknown>;
     const decks = JSON.parse(decksJson) as Record<string, Record<string, unknown>>;
 
+    // Strip any previously-embedded configs so the uploaded .apkg is always
+    // treated as clean. Without this, re-uploading an already-embedded file
+    // would accumulate orphan config entries and keep incrementing the ID,
+    // while re-uploading the original would always produce ID 2 — both cases
+    // risk Anki silently skipping a config update on re-import.
+    for (const key of Object.keys(dconf)) {
+      if (key !== "1") delete dconf[key];
+    }
+
     // Allocate a new config ID so dconf["1"] (the shared Default) is never touched.
+    // After stripping above this is always 2, which keeps imports idempotent.
     const newConfigId = Math.max(...Object.keys(dconf).map(k => parseInt(k, 10))) + 1;
     dconf[String(newConfigId)] = buildDconfEntry(newConfigId, preset);
 
