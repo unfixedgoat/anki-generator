@@ -168,6 +168,8 @@ function PresetDisplay({
       const fd = new FormData();
       fd.append("apkg", new File([apkgBlob], "deck.apkg", { type: "application/octet-stream" }));
       fd.append("preset", JSON.stringify(preset));
+      console.log("Sending preset:", JSON.stringify(preset));
+      console.log("FormData keys:", [...fd.keys()]);
       const res = await fetch("/api/embed-preset", { method: "POST", body: fd });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
