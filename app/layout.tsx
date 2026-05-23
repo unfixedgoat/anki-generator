@@ -89,13 +89,6 @@ export default function RootLayout({
         <PostHogProvider>
         <ClerkProvider>
           {children}
-          {/* Live indicator — v2.8 discriminated union fix deployed */}
-          <div className="fixed bottom-4 left-4 z-50">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-blue-500" />
-            </span>
-          </div>
           <Script
             src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
             integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"

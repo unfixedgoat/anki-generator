@@ -41,12 +41,12 @@ function isValidPreset(p: unknown): p is AnkiPreset {
   return true;
 }
 
-function parseStepsToMinutes(steps: string): number[] {
+function parseStepsToSeconds(steps: string): number[] {
   return steps.split(/\s+/).filter(Boolean).map((tok) => {
-    if (tok.endsWith("m")) return parseFloat(tok);
-    if (tok.endsWith("h")) return parseFloat(tok) * 60;
-    if (tok.endsWith("s")) return parseFloat(tok) / 60;
-    if (tok.endsWith("d")) return parseFloat(tok) * 1440;
+    if (tok.endsWith("m")) return parseFloat(tok) * 60;
+    if (tok.endsWith("h")) return parseFloat(tok) * 3600;
+    if (tok.endsWith("s")) return parseFloat(tok);
+    if (tok.endsWith("d")) return parseFloat(tok) * 86400;
     return parseFloat(tok);
   });
 }
@@ -72,7 +72,7 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
     timer: 0,
     replayq: true,
     new: {
-      delays: parseStepsToMinutes(preset.learning_steps),
+      delays: parseStepsToSeconds(preset.learning_steps),
       ints: smInts,
       // initialFactor (SM-2 starting ease) and the rev SM-2 multipliers below are
       // at Anki's own defaults and are ignored by FSRS, so they need no branching.
@@ -90,7 +90,7 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
       hardFactor: 1.2, // SM-2 hard multiplier — ignored by FSRS
     },
     lapse: {
-      delays: parseStepsToMinutes(preset.relearning_steps),
+      delays: parseStepsToSeconds(preset.relearning_steps),
       mult: 0.0,       // SM-2 new-interval percentage — ignored by FSRS
       minInt: preset.minimum_interval,
       leechFails: preset.leech_threshold,
@@ -163,8 +163,14 @@ export async function POST(req: NextRequest) {
   try {
     // Unzip the .apkg
     const zip = await JSZip.loadAsync(apkgBytes);
-    const dbFile = zip.file("collection.anki2");
-    if (!dbFile) throw new Error("collection.anki2 not found in .apkg");
+    let dbFilename = "collection.anki21b";
+    let dbFile = zip.file(dbFilename);
+    if (!dbFile) {
+      dbFilename = "collection.anki2";
+      dbFile = zip.file(dbFilename);
+    }
+    if (!dbFile) throw new Error("No collection.anki21b or collection.anki2 found in .apkg");
+    console.error(`[embed-preset] Patching ${dbFilename}`);
     const dbBytes = new Uint8Array(await dbFile.async("arraybuffer"));
 
     // Open existing SQLite database
@@ -195,9 +201,10 @@ export async function POST(req: NextRequest) {
     dconf[String(newConfigId)] = buildDconfEntry(newConfigId, preset);
 
     // Point only our non-Default decks at the new config.
+    // Preserve the type of the existing conf value (string in some older exports).
     for (const [deckId, deck] of Object.entries(decks)) {
       if (deckId !== "1" && deck["name"] !== "Default") {
-        deck["conf"] = newConfigId;
+        deck["conf"] = typeof deck["conf"] === "string" ? String(newConfigId) : newConfigId;
       }
     }
 
@@ -210,11 +217,11 @@ export async function POST(req: NextRequest) {
     const patchedDb = db.export();
     db.close();
 
-    // Re-zip, replacing collection.anki2
+    // Re-zip, replacing the patched database file
     const newZip = new JSZip();
     for (const [name, file] of Object.entries(zip.files)) {
       if (file.dir) continue;
-      if (name === "collection.anki2") {
+      if (name === dbFilename) {
         newZip.file(name, patchedDb);
       } else {
         newZip.file(name, await file.async("uint8array"));

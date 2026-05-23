@@ -128,13 +128,13 @@ function makeTestCases(): TestCase[] {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Matches the route's parseStepsToMinutes — Anki dconf stores delays in minutes.
-function parseStepsToMinutes(steps: string): number[] {
+// Matches the route's parseStepsToSeconds — Anki dconf stores delays in seconds.
+function parseStepsToSeconds(steps: string): number[] {
   return steps.split(/\s+/).filter(Boolean).map((tok) => {
-    if (tok.endsWith("m")) return parseFloat(tok);
-    if (tok.endsWith("h")) return parseFloat(tok) * 60;
-    if (tok.endsWith("s")) return parseFloat(tok) / 60;
-    if (tok.endsWith("d")) return parseFloat(tok) * 1440;
+    if (tok.endsWith("m")) return parseFloat(tok) * 60;
+    if (tok.endsWith("h")) return parseFloat(tok) * 3600;
+    if (tok.endsWith("s")) return parseFloat(tok);
+    if (tok.endsWith("d")) return parseFloat(tok) * 86400;
     return parseFloat(tok);
   });
 }
@@ -163,7 +163,7 @@ async function createSyntheticApkg(SQL: SqlJsStatic): Promise<Buffer> {
   db.close();
 
   const zip = new JSZip();
-  zip.file("collection.anki2", dbBytes);
+  zip.file("collection.anki21b", dbBytes);
   const zipBytes: Uint8Array = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
   return Buffer.from(zipBytes);
 }
@@ -199,8 +199,8 @@ async function extractDconf(
   const zip = new JSZip();
   await zip.loadAsync(apkg);
 
-  const dbFile = zip.file("collection.anki2");
-  if (!dbFile) throw new Error("collection.anki2 not found in .apkg");
+  const dbFile = zip.file("collection.anki21b") ?? zip.file("collection.anki2");
+  if (!dbFile) throw new Error("No collection.anki21b or collection.anki2 found in .apkg");
 
   const dbBytes: Uint8Array = await dbFile.async("uint8array");
   const db = new SQL.Database(dbBytes);
@@ -244,9 +244,9 @@ function assertPreset(
   // desiredRetention — preset stores as fraction (e.g. 0.80), dconf stores same fraction
   check("desiredRetention", cfg.desiredRetention, preset.desired_retention);
 
-  // new.delays and lapse.delays are stored in minutes (matching route's parseStepsToMinutes)
-  check("new.delays", newSec.delays, parseStepsToMinutes(preset.learning_steps));
-  check("lapse.delays", lapseSec.delays, parseStepsToMinutes(preset.relearning_steps));
+  // new.delays and lapse.delays are stored in seconds (matching route's parseStepsToSeconds)
+  check("new.delays", newSec.delays, parseStepsToSeconds(preset.learning_steps));
+  check("lapse.delays", lapseSec.delays, parseStepsToSeconds(preset.relearning_steps));
 
   check("lapse.leechFails", lapseSec.leechFails, preset.leech_threshold);
 
