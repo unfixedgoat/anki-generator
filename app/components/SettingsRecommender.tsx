@@ -311,6 +311,11 @@ function PresetDisplay({
           <p className="text-[10px] text-slate-500 text-center tracking-wide">
             When importing, select <em>Import with deck presets</em> in the Anki import dialog.
           </p>
+          {preset.fsrs_enabled && (
+            <p className="text-[10px] text-amber-400 text-center tracking-wide">
+              FSRS must be enabled manually: Anki → Tools → Preferences → Review → FSRS.
+            </p>
+          )}
         </div>
       )}
 
