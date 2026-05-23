@@ -41,12 +41,13 @@ function isValidPreset(p: unknown): p is AnkiPreset {
   return true;
 }
 
-function parseStepsToSeconds(steps: string): number[] {
+// collection.anki2 stores delays in minutes — convert user-facing step strings accordingly.
+function parseStepsToMinutes(steps: string): number[] {
   return steps.split(/\s+/).filter(Boolean).map((tok) => {
-    if (tok.endsWith("m")) return parseFloat(tok) * 60;
-    if (tok.endsWith("h")) return parseFloat(tok) * 3600;
-    if (tok.endsWith("s")) return parseFloat(tok);
-    if (tok.endsWith("d")) return parseFloat(tok) * 86400;
+    if (tok.endsWith("m")) return parseFloat(tok);
+    if (tok.endsWith("h")) return parseFloat(tok) * 60;
+    if (tok.endsWith("s")) return parseFloat(tok) / 60;
+    if (tok.endsWith("d")) return parseFloat(tok) * 1440;
     return parseFloat(tok);
   });
 }
@@ -72,7 +73,7 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
     timer: 0,
     replayq: true,
     new: {
-      delays: parseStepsToSeconds(preset.learning_steps),
+      delays: parseStepsToMinutes(preset.learning_steps),
       ints: smInts,
       // initialFactor (SM-2 starting ease) and the rev SM-2 multipliers below are
       // at Anki's own defaults and are ignored by FSRS, so they need no branching.
@@ -90,7 +91,7 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
       hardFactor: 1.2, // SM-2 hard multiplier — ignored by FSRS
     },
     lapse: {
-      delays: parseStepsToSeconds(preset.relearning_steps),
+      delays: parseStepsToMinutes(preset.relearning_steps),
       mult: 0.0,       // SM-2 new-interval percentage — ignored by FSRS
       minInt: preset.minimum_interval,
       leechFails: preset.leech_threshold,
