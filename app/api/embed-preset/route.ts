@@ -163,14 +163,9 @@ export async function POST(req: NextRequest) {
   try {
     // Unzip the .apkg
     const zip = await JSZip.loadAsync(apkgBytes);
-    let dbFilename = "collection.anki21b";
-    let dbFile = zip.file(dbFilename);
-    if (!dbFile) {
-      dbFilename = "collection.anki2";
-      dbFile = zip.file(dbFilename);
-    }
-    if (!dbFile) throw new Error("No collection.anki21b or collection.anki2 found in .apkg");
-    console.error(`[embed-preset] Patching ${dbFilename}`);
+    const dbFilename = "collection.anki2";
+    const dbFile = zip.file(dbFilename);
+    if (!dbFile) throw new Error("No collection.anki2 found in .apkg");
     const dbBytes = new Uint8Array(await dbFile.async("arraybuffer"));
 
     // Open existing SQLite database
