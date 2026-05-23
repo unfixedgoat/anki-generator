@@ -52,7 +52,7 @@ function parseStepsToMinutes(steps: string): number[] {
   });
 }
 
-function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, unknown> {
+function buildDconfEntry(configId: number, preset: AnkiPreset, deckName: string): Record<string, unknown> {
   // new.ints = [graduating_interval, easy_interval, legacy_easy_interval].
   // FSRS branch: Anki ignores these for scheduling but displays them in the UI.
   //   Write neutral display values from local constants — FsrsOnPreset intentionally
@@ -65,7 +65,7 @@ function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, u
 
   return {
     id: configId,
-    name: "highyield.cards",
+    name: deckName,
     mod: Math.floor(Date.now() / 1000),
     usn: -1,
     maxTaken: 60,
@@ -194,7 +194,15 @@ export async function POST(req: NextRequest) {
     // Allocate a new config ID so dconf["1"] (the shared Default) is never touched.
     // After stripping above this is always 2, which keeps imports idempotent.
     const newConfigId = Math.max(...Object.keys(dconf).map(k => parseInt(k, 10))) + 1;
-    dconf[String(newConfigId)] = buildDconfEntry(newConfigId, preset);
+
+    // Use the first non-Default deck name so the config is named after the deck.
+    // Anki deduplicates configs by name on import — a unique name ensures fresh
+    // settings are applied rather than the old config being reused.
+    const primaryDeckName = Object.entries(decks)
+      .filter(([id, d]) => id !== "1" && d["name"] !== "Default")
+      .map(([, d]) => d["name"] as string)[0] ?? "highyield.cards";
+
+    dconf[String(newConfigId)] = buildDconfEntry(newConfigId, preset, primaryDeckName);
 
     // Point only our non-Default decks at the new config.
     // Preserve the type of the existing conf value (string in some older exports).
