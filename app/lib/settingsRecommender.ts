@@ -21,27 +21,41 @@ export interface RationaleItem {
   reason: string;
 }
 
-export interface AnkiPreset {
+// Fields shared by both scheduler modes.
+interface PresetBase {
   new_cards_per_day: number;
   maximum_reviews_per_day: number;
   new_cards_ignore_review_limit: boolean;
   limits_start_from_top: boolean;
   learning_steps: string;
-  graduating_interval: number;
-  easy_interval: number;
   insertion_order: "sequential" | "random";
   relearning_steps: string;
   minimum_interval: number;
   leech_threshold: number;
   leech_action: "tag_only" | "suspend";
   desired_retention: number;
-  fsrs_enabled: true;
   maximum_interval: number;
   estimated_daily_new_cards: number;
   estimated_finish_date: string | null;
   warnings: Warning[];
   rationale: RationaleItem[];
 }
+
+// FSRS mode: graduating_interval and easy_interval are omitted.
+// The embed route writes neutral SM-2 display values ([1, 4, 7]) from local
+// constants; these fields have no scheduling role when FSRS is active.
+export interface FsrsOnPreset extends PresetBase {
+  fsrs_enabled: true;
+}
+
+// SM-2 mode: graduating_interval and easy_interval are load-bearing.
+export interface Sm2Preset extends PresetBase {
+  fsrs_enabled: false;
+  graduating_interval: number;
+  easy_interval: number;
+}
+
+export type AnkiPreset = FsrsOnPreset | Sm2Preset;
 
 export interface RecommenderInput {
   deck_sizes: number[];
@@ -51,6 +65,7 @@ export interface RecommenderInput {
   cards_already_learned?: number;
   difficulty_self_assessment?: DifficultyAssessment;
   intensity_mode?: IntensityMode;
+  fsrs_enabled?: boolean; // default true
 }
 
 const INTENSITY_RATIOS: Record<IntensityMode, number> = {
@@ -182,6 +197,7 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     daily_minutes_budget = null,
     cards_already_learned = 0,
     difficulty_self_assessment = "medium",
+    fsrs_enabled = true,
   } = input;
 
   const totalDeckSize = deck_sizes.reduce((a, b) => a + b, 0);
@@ -297,13 +313,8 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
   const easy_interval = isCramMode ? 2 : 4;
   const minimum_interval = 1;
 
-  rationale.push({ field: "graduating_interval", reason: `1 day — with FSRS enabled Anki overrides this, but it's emitted for compatibility with non-FSRS versions.` });
-  rationale.push({
-    field: "easy_interval",
-    reason: isCramMode
-      ? `2 days — keeps cards close so they resurface before your exam.`
-      : `4 days (modern Anki default) — rarely applied since FSRS computes intervals independently.`,
-  });
+  // graduating_interval / easy_interval rationale is only relevant in SM-2 mode;
+  // in FSRS mode those fields are not emitted at all.
   rationale.push({ field: "minimum_interval", reason: `1 day floor prevents Anki from scheduling a card for the same day it was studied.` });
 
   // ── Step 5 — leech threshold / action ──────────────────────────────────────
@@ -382,25 +393,35 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     }
   }
 
-  return {
+  const base: PresetBase = {
     new_cards_per_day,
     maximum_reviews_per_day,
     new_cards_ignore_review_limit: false,
     limits_start_from_top: false,
     learning_steps,
-    graduating_interval,
-    easy_interval,
     insertion_order,
     relearning_steps,
     minimum_interval,
     leech_threshold,
     leech_action,
     desired_retention,
-    fsrs_enabled: true,
     maximum_interval,
     estimated_daily_new_cards,
     estimated_finish_date,
     warnings,
     rationale,
   };
+
+  if (!fsrs_enabled) {
+    rationale.push({ field: "graduating_interval", reason: `1 day — SM-2 uses this as the first review interval after a card leaves the learning queue.` });
+    rationale.push({
+      field: "easy_interval",
+      reason: isCramMode
+        ? `2 days — keeps cards close so they resurface before your exam.`
+        : `4 days (modern Anki default) — the interval awarded when you press Easy on a new card.`,
+    });
+    return { ...base, fsrs_enabled: false, graduating_interval, easy_interval };
+  }
+
+  return { ...base, fsrs_enabled: true };
 }

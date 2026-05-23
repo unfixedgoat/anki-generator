@@ -20,20 +20,24 @@ interface SqlModule {
 function isValidPreset(p: unknown): p is AnkiPreset {
   if (typeof p !== "object" || p === null) return false;
   const r = p as Record<string, unknown>;
+  // Fields required by both FsrsOnPreset and Sm2Preset
   if (typeof r.new_cards_per_day !== "number" || !isFinite(r.new_cards_per_day)) return false;
   if (typeof r.maximum_reviews_per_day !== "number" || !isFinite(r.maximum_reviews_per_day)) return false;
   if (typeof r.learning_steps !== "string") return false;
-  if (typeof r.graduating_interval !== "number" || !isFinite(r.graduating_interval)) return false;
-  if (typeof r.easy_interval !== "number" || !isFinite(r.easy_interval)) return false;
   if (r.insertion_order !== "sequential" && r.insertion_order !== "random") return false;
   if (typeof r.relearning_steps !== "string") return false;
   if (typeof r.minimum_interval !== "number" || !isFinite(r.minimum_interval)) return false;
   if (typeof r.leech_threshold !== "number" || !isFinite(r.leech_threshold)) return false;
   if (r.leech_action !== "tag_only" && r.leech_action !== "suspend") return false;
-  if (r.fsrs_enabled !== true) return false;
+  if (r.fsrs_enabled !== true && r.fsrs_enabled !== false) return false;
   if (typeof r.desired_retention !== "number" || !isFinite(r.desired_retention) ||
       r.desired_retention < 0 || r.desired_retention > 1) return false;
   if (typeof r.maximum_interval !== "number" || !isFinite(r.maximum_interval)) return false;
+  // SM-2 only: graduating_interval and easy_interval are required when FSRS is off
+  if (r.fsrs_enabled === false) {
+    if (typeof r.graduating_interval !== "number" || !isFinite(r.graduating_interval)) return false;
+    if (typeof r.easy_interval !== "number" || !isFinite(r.easy_interval)) return false;
+  }
   return true;
 }
 
@@ -49,12 +53,12 @@ function parseStepsToMinutes(steps: string): number[] {
 
 function buildDconfEntry(configId: number, preset: AnkiPreset): Record<string, unknown> {
   // new.ints = [graduating_interval, easy_interval, legacy_easy_interval].
-  // When FSRS is enabled, Anki ignores these for scheduling but still stores and
-  // DISPLAYS them in the deck options UI — writing mode-specific values (e.g.
-  // easy_interval=2 from cram mode) would show misleading numbers that don't
-  // correspond to anything the user configured. Use Anki's neutral defaults instead.
-  // For SM-2 (fsrs_enabled=false) the values are load-bearing and must come from the preset.
-  const smInts = preset.fsrs_enabled
+  // FSRS branch: Anki ignores these for scheduling but displays them in the UI.
+  //   Write neutral display values from local constants — FsrsOnPreset intentionally
+  //   omits graduating_interval / easy_interval so there is nothing mode-specific to leak.
+  // SM-2 branch: TypeScript narrows preset to Sm2Preset here, making these fields
+  //   available as load-bearing schedule inputs.
+  const smInts: [number, number, number] = preset.fsrs_enabled
     ? [1, 4, 7]
     : [preset.graduating_interval, preset.easy_interval, 7];
 

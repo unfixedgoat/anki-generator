@@ -256,10 +256,10 @@ function PresetDisplay({
 
         <Section title="New Cards">
           <Field label="Learning steps"        value={preset.learning_steps}                      rationale={rationaleFor("learning_steps")} />
-          {!useFsrs && (
+          {!preset.fsrs_enabled && (
             <Field label="Graduating interval" value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
           )}
-          {!useFsrs && (
+          {!preset.fsrs_enabled && (
             <Field label="Easy interval"       value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
           )}
           <Field label="Insertion order"       value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
@@ -378,6 +378,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         daily_minutes_budget: mins,
         difficulty_self_assessment: difficulty,
         intensity_mode: intensity,
+        fsrs_enabled: useFsrs,
       })
     );
     setInputsCollapsed(true);
@@ -434,6 +435,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           daily_minutes_budget: mins,
           difficulty_self_assessment: difficulty,
           intensity_mode: intensity,
+          fsrs_enabled: useFsrs,
         })
       );
     } catch (err) {

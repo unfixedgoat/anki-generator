@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts",
-    "test:citations": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts --citations-only"
+    "test:citations": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts --citations-only",
+    "test:embed": "npx ts-node --project scripts/tsconfig.json scripts/test-embed-preset.ts",
+    "test:critique": "npx ts-node --project scripts/tsconfig.json scripts/test-harsh-critique.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.7",
