@@ -191,13 +191,12 @@ export async function POST(req: NextRequest) {
       if (key !== "1") delete dconf[key];
     }
 
-    // Allocate a new config ID so dconf["1"] (the shared Default) is never touched.
-    // After stripping above this is always 2, which keeps imports idempotent.
-    const newConfigId = Math.max(...Object.keys(dconf).map(k => parseInt(k, 10))) + 1;
+    // Use a timestamp-based ID (same scheme Anki uses) so each export gets a
+    // unique config ID. max+1 always produces 2, which Anki already has from any
+    // prior import and silently reuses — ignoring the new settings entirely.
+    const newConfigId = Math.floor(Date.now() / 1000);
 
-    // Use the first non-Default deck name so the config is named after the deck.
-    // Anki deduplicates configs by name on import — a unique name ensures fresh
-    // settings are applied rather than the old config being reused.
+    // Name the config after the deck so it's identifiable in Anki's UI.
     const primaryDeckName = Object.entries(decks)
       .filter(([id, d]) => id !== "1" && d["name"] !== "Default")
       .map(([, d]) => d["name"] as string)[0] ?? "highyield.cards";
