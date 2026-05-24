@@ -1,4 +1,4 @@
-// Stripe dashboard webhook events: checkout.session.completed, customer.subscription.deleted, charge.refunded
+// Stripe dashboard webhook events: checkout.session.completed, customer.subscription.deleted, charge.refunded, invoice.payment_succeeded
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { Redis } from "@upstash/redis";
@@ -78,6 +78,29 @@ export async function POST(req: NextRequest) {
           cancel_at_period_end: subscription.cancel_at_period_end,
         },
       });
+    }
+  } else if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object as Stripe.Invoice;
+    let identifier = invoice.subscription_details?.metadata?.identifier;
+    if (!identifier && invoice.subscription) {
+      const subId =
+        typeof invoice.subscription === "string"
+          ? invoice.subscription
+          : invoice.subscription.id;
+      const sub = await stripe.subscriptions.retrieve(subId);
+      identifier = sub.metadata?.identifier;
+    }
+    if (!identifier) {
+      console.warn("[stripe webhook] invoice.payment_succeeded: no identifier found, skipping");
+    } else {
+      await redis.set(`pro:${identifier}`, "1", { ex: PRO_TTL });
+      if (identifier.startsWith("user_")) {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(identifier, {
+          publicMetadata: { plan: "pro" },
+        });
+      }
+      console.log(`[stripe webhook] refreshed pro key for ${identifier}, expires in 31d`);
     }
   } else if (event.type === "charge.refunded") {
     const charge = event.data.object as Stripe.Charge;

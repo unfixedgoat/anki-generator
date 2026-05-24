@@ -1,0 +1,55 @@
+Regression Baseline — Failures Log
+Commit: cd46884b801bb1ab2688433fc9a75caa163a9599
+Date:   2026-05-23
+
+========================================================
+FAILED: test:decks (exit 1)
+========================================================
+All 24 combinations failed with HTTP 429 Free limit reached.
+Root cause: the dev server is hitting the rate-limit cap (limit:5, remaining:0).
+Reset timestamp: 1780704000000 (2026-06-05 00:00:00 UTC)
+
+Representative error:
+  HTTP 429: {"error":"Free limit reached","limit":5,"remaining":0,
+             "reset":1780704000000,"upgrade":"https://highyield.cards"}
+
+Summary: 0/24 passed
+
+========================================================
+FAILED: test:embed (exit 1)
+========================================================
+All 6 embed-preset cases failed with HTTP 500.
+Root cause: /api/embed-preset returns {"error":"Export failed. Please try again."}
+for every case (FSRS on and off alike).
+
+Representative error:
+  API call failed: HTTP 500: {"error":"Export failed. Please try again."}
+
+Summary: 0/6 passed
+
+========================================================
+FAILED: test:citations (exit 1)
+========================================================
+All 3 citation tests failed with HTTP 429 Free limit reached.
+Root cause: same rate-limit exhaustion as test:decks (shared /api/generate endpoint).
+
+Representative error:
+  HTTP 429: {"error":"Free limit reached","limit":5,"remaining":0,
+             "reset":1780704000000,"upgrade":"https://highyield.cards"}
+
+Summary: 0/3 passed
+
+========================================================
+NOTE: verify:caps (exit 0, internal T3 sub-failure)
+========================================================
+Script exited 0 but reported one internal failure:
+  FAIL  T3-second — status 200 (expected 429)
+  (rate-limit hot-reload patch did not take effect in time)
+This was NOT counted as a suite failure (exit code 0), but is flagged here
+for awareness.
+
+========================================================
+PASSED (not logged in detail)
+========================================================
+  test:critique  — 1511/1511 assertions passed (exit 0)
+  verify:stripe  — 7/7 tests passed (exit 0)

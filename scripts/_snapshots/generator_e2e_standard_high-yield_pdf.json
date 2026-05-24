@@ -1,0 +1,9 @@
+{
+  "style": "standard",
+  "density": "high-yield",
+  "mode": "pdf",
+  "cards": 15,
+  "citations": 15,
+  "visuals": 1,
+  "failures": []
+}

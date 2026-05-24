@@ -14,6 +14,18 @@ import * as fs from "fs";
 import * as path from "path";
 
 const BASE_URL = "http://localhost:3000";
+
+// Load bypass token from .env.local so T2 is not throttled by prior test runs.
+let BYPASS_TOKEN = process.env.TEST_BYPASS_TOKEN ?? "";
+if (!BYPASS_TOKEN) {
+  try {
+    const lines = fs.readFileSync(path.resolve(__dirname, "../.env.local"), "utf8").split("\n");
+    for (const line of lines) {
+      const m = line.match(/^TEST_BYPASS_TOKEN=(.+)$/);
+      if (m) { BYPASS_TOKEN = m[1].trim(); break; }
+    }
+  } catch { /* .env.local absent */ }
+}
 const RATELIMIT_PATH = path.resolve(__dirname, "../app/lib/ratelimit.ts");
 
 const ORIGINAL_LIMIT = `slidingWindow(5, "30 d")`;
@@ -98,7 +110,10 @@ async function test2(): Promise<void> {
     res = await fetch(`${BASE_URL}/api/generate`, {
       method: "POST",
       body: fd,
-      headers: { "x-forwarded-for": "test-normal-gen" },
+      headers: {
+        "x-forwarded-for": "test-normal-gen",
+        ...(BYPASS_TOKEN ? { "x-test-token": BYPASS_TOKEN } : {}),
+      },
     });
   } catch (e) {
     fail("T2", `Network error: ${e}`);
@@ -143,8 +158,8 @@ async function test3(): Promise<void> {
   const patched = original.replace(ORIGINAL_LIMIT, TEST_LIMIT);
   try {
     fs.writeFileSync(RATELIMIT_PATH, patched, "utf8");
-    console.log(`  Patched ratelimit.ts → ${TEST_LIMIT}, waiting 4 s for Next.js hot-reload…`);
-    await sleep(4_000);
+    console.log(`  Patched ratelimit.ts → ${TEST_LIMIT}, waiting 8 s for Next.js hot-reload…`);
+    await sleep(8_000);
   } catch (e) {
     fail("T3", `Could not write patched ratelimit.ts: ${e}`);
     return;

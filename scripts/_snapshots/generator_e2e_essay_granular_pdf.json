@@ -1,0 +1,9 @@
+{
+  "style": "essay",
+  "density": "granular",
+  "mode": "pdf",
+  "cards": 10,
+  "citations": 10,
+  "visuals": 1,
+  "failures": []
+}

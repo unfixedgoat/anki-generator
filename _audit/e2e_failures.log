@@ -1,0 +1,53 @@
+E2E failure log — 2026-05-23T22:17:04.021Z
+17 / 48 tests failed
+
+── essay / comprehensive / pdf ──
+  • API call failed: The operation was aborted due to timeout
+
+── essay / granular / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── essay / granular / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── solve / granular / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── solve / granular / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / high-yield / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / high-yield / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / comprehensive / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / comprehensive / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / granular / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── formula / granular / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / high-yield / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / high-yield / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / comprehensive / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / comprehensive / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / granular / pdf ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}
+
+── custom / granular / paste ──
+  • HTTP 502 — {"error":"Card generation failed. Please try again."}

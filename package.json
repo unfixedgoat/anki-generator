@@ -1,6 +1,6 @@
 {
   "name": "highyield-cards",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,7 +10,14 @@
     "test:decks": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts",
     "test:citations": "npx ts-node --project scripts/tsconfig.json scripts/test-deck-quality.ts --citations-only",
     "test:embed": "npx ts-node --project scripts/tsconfig.json scripts/test-embed-preset.ts",
-    "test:critique": "npx ts-node --project scripts/tsconfig.json scripts/test-harsh-critique.ts"
+    "test:critique": "npx ts-node --project scripts/tsconfig.json scripts/test-harsh-critique.ts",
+    "verify:stripe": "npx ts-node --project scripts/tsconfig.json scripts/verify-stripe.ts",
+    "test:e2e": "npx tsx scripts/test-generator-e2e.ts",
+    "test:auth": "npx tsx scripts/test-auth-flow.ts",
+    "test:adversarial": "npx tsx scripts/test-adversarial.ts",
+    "test:wikimedia": "npx tsx scripts/test-wikimedia.ts",
+    "test:repairjson": "npx tsx scripts/test-repairjson.ts",
+    "verify:caps": "npx ts-node --project scripts/tsconfig.json scripts/verify-caps.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.7",

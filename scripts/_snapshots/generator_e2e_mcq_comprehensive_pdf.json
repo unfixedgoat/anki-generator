@@ -1,0 +1,9 @@
+{
+  "style": "mcq",
+  "density": "comprehensive",
+  "mode": "pdf",
+  "cards": 20,
+  "citations": 20,
+  "visuals": 0,
+  "failures": []
+}

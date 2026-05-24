@@ -1,0 +1,49 @@
+Embed-Preset HTTP 500 — Root Cause Trace
+Date: 2026-05-23
+
+== Server-side exception (from route.ts catch block) ==
+
+Error: No collection.anki2 found in .apkg
+    at POST (app/api/embed-preset/route.ts:169)
+    caught at line 240: console.error("[embed-preset] Processing error:", err)
+    returned as: NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 })
+
+== Root cause ==
+
+Commit e16e204 ("revert anki21b: use collection.anki2 exclusively; drop anki21b fallback")
+changed app/api/embed-preset/route.ts to look ONLY for "collection.anki2":
+
+    const dbFilename = "collection.anki2";
+    const dbFile = zip.file(dbFilename);
+    if (!dbFile) throw new Error("No collection.anki2 found in .apkg");
+
+But scripts/test-embed-preset.ts createSyntheticApkg() was never updated and still packs
+the SQLite database as "collection.anki21b" (line 166):
+
+    zip.file("collection.anki21b", dbBytes);   // <-- stale; route can't find this
+
+This mismatch means every test POST sends an .apkg the route cannot read → 500.
+
+== Secondary issue (would cause assertion failures after 500 is fixed) ==
+
+Commit 668bb68 ("fix embed-preset: store steps in minutes, not seconds") renamed
+parseStepsToSeconds → parseStepsToMinutes in the route and changed the conversion math.
+
+The test script's parseStepsToSeconds helper (line 131–140) was NOT updated — it still
+converts to seconds (× 60 for "m" suffix). The assertions on lines 248–249 would therefore
+compare route-written minutes against test-expected seconds and fail for every case.
+
+== Fix applied ==
+
+1. scripts/test-embed-preset.ts line 166: "collection.anki21b" → "collection.anki2"
+2. scripts/test-embed-preset.ts parseStepsToSeconds renamed to parseStepsToMinutes
+   with matching conversion math (identical to route's parseStepsToMinutes)
+3. Lines 248–249: parseStepsToSeconds(...) → parseStepsToMinutes(...)
+4. Comment on line 131 updated to reflect minutes storage
+
+== Commits responsible ==
+
+e16e204  revert anki21b: use collection.anki2 exclusively; drop anki21b fallback
+668bb68  fix embed-preset: store steps in minutes, not seconds (collection.anki2 format)
+
+Both commits correctly updated the route but did not update the test script.

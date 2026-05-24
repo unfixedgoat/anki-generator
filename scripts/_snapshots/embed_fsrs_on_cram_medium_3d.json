@@ -1,0 +1,101 @@
+{
+  "1": {
+    "id": 1,
+    "name": "Default",
+    "mod": 0,
+    "usn": 0,
+    "maxTaken": 60,
+    "autoplay": true,
+    "timer": 0,
+    "replayq": true,
+    "new": {
+      "delays": [
+        1,
+        10
+      ],
+      "ints": [
+        1,
+        4,
+        4
+      ],
+      "initialFactor": 2500,
+      "order": 1,
+      "perDay": 20,
+      "bury": false
+    },
+    "rev": {
+      "perDay": 200,
+      "ease4": 1.3,
+      "ivlFct": 1,
+      "maxIvl": 36500,
+      "bury": false,
+      "hardFactor": 1.2
+    },
+    "lapse": {
+      "delays": [
+        10
+      ],
+      "mult": 0,
+      "minInt": 1,
+      "leechFails": 8,
+      "leechAction": 0
+    },
+    "dyn": false
+  },
+  "1779594931": {
+    "id": 1779594931,
+    "name": "highyield.cards test",
+    "mod": 1779594931,
+    "usn": -1,
+    "maxTaken": 60,
+    "autoplay": true,
+    "timer": 0,
+    "replayq": true,
+    "new": {
+      "delays": [
+        1,
+        10,
+        60,
+        120
+      ],
+      "ints": [
+        1,
+        4,
+        7
+      ],
+      "initialFactor": 2500,
+      "order": 0,
+      "perDay": 9999,
+      "bury": false
+    },
+    "rev": {
+      "perDay": 9999,
+      "ease4": 1.3,
+      "ivlFct": 1,
+      "maxIvl": 3,
+      "bury": false,
+      "hardFactor": 1.2
+    },
+    "lapse": {
+      "delays": [
+        1,
+        10
+      ],
+      "mult": 0,
+      "minInt": 1,
+      "leechFails": 99,
+      "leechAction": 1
+    },
+    "dyn": false,
+    "newMix": 0,
+    "newPerDayMinimum": 0,
+    "interdayLearningMix": 0,
+    "reviewOrder": 0,
+    "newSortOrder": 0,
+    "newGatherPriority": 0,
+    "buryInterdayLearning": false,
+    "fsrsEnabled": true,
+    "desiredRetention": 0.8,
+    "fsrsParams5": []
+  }
+}

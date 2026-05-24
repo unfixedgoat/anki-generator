@@ -1,0 +1,9 @@
+{
+  "style": "mcq",
+  "density": "granular",
+  "mode": "pdf",
+  "cards": 6,
+  "citations": 6,
+  "visuals": 0,
+  "failures": []
+}

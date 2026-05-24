@@ -52,23 +52,22 @@ const FILENAME_REJECT = [
   "flag", "coat", "arms", "logo", "icon", "portrait", "photo", "map_of",
   "locator", "seal", "emblem", "crest", "person", "people", "building", "landscape",
 ];
-const FILENAME_REQUIRE = [
-  "diagram", "scheme", "pathway", "structure", "cycle", "receptor", "channel",
-  "cell", "membrane", "synapse", "pump", "protein", "molecule", "anatomy",
-  "cross", "section", "illustration", "fig", "chart", "graph", "svg",
-];
 
 function isAcceptableImageUrl(url: string): boolean {
   const filename = (url.split("/").pop() ?? "").toLowerCase();
   if (filename.endsWith(".gif")) return false;
   if (FILENAME_REJECT.some(w => filename.includes(w))) return false;
-  if (!FILENAME_REQUIRE.some(w => filename.includes(w))) return false;
   return true;
 }
 
 const BIAS_TERMS = ["diagram", "pathway", "structure", "cycle"];
 
-async function fetchWikimediaUrl(searchTerm: string): Promise<string | null> {
+type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
+
+export async function fetchWikimediaUrl(
+  searchTerm: string,
+  fetcher: Fetcher = fetch
+): Promise<string | null> {
   try {
     const biasedTerm = BIAS_TERMS.some(t => searchTerm.toLowerCase().includes(t))
       ? searchTerm
@@ -78,7 +77,7 @@ async function fetchWikimediaUrl(searchTerm: string): Promise<string | null> {
       `https://en.wikipedia.org/w/api.php?action=query&list=search` +
       `&srsearch=${encodeURIComponent(biasedTerm)}&srnamespace=0&srlimit=5` +
       `&format=json&origin=*`;
-    const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
+    const searchRes = await fetcher(searchUrl, { signal: AbortSignal.timeout(8000) });
     if (!searchRes.ok) return null;
     const searchData = await searchRes.json() as {
       query?: { search?: { title: string }[] };
@@ -104,7 +103,7 @@ async function fetchWikimediaUrl(searchTerm: string): Promise<string | null> {
     const thumbUrl =
       `https://en.wikipedia.org/w/api.php?action=query&titles=${titlesParam}` +
       `&prop=pageimages&pithumbsize=800&pilicense=any&format=json&origin=*`;
-    const thumbRes = await fetch(thumbUrl, { signal: AbortSignal.timeout(8000) });
+    const thumbRes = await fetcher(thumbUrl, { signal: AbortSignal.timeout(8000) });
     if (!thumbRes.ok) return null;
     const thumbData = await thumbRes.json() as {
       query?: { pages?: Record<string, { title?: string; thumbnail?: { source: string } }> };

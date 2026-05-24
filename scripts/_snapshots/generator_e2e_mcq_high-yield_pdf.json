@@ -1,0 +1,9 @@
+{
+  "style": "mcq",
+  "density": "high-yield",
+  "mode": "pdf",
+  "cards": 12,
+  "citations": 12,
+  "visuals": 2,
+  "failures": []
+}

@@ -180,6 +180,83 @@ async function test6() {
   }
 }
 
+async function test8() {
+  console.log("\n─── TEST 8: invoice.payment_succeeded webhook refreshes pro key ───");
+
+  const redis = Redis.fromEnv();
+  await redis.del(`pro:${TEST_ID}`);
+
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!webhookSecret || !stripeSecretKey) {
+    fail("T8", "STRIPE_WEBHOOK_SECRET or STRIPE_SECRET_KEY not set — cannot forge webhook");
+    return;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const StripeLib = require("stripe") as any;
+  const stripe = new StripeLib(stripeSecretKey);
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const invoicePayload = {
+    id: `evt_test_invoice_${timestamp}`,
+    object: "event",
+    api_version: "2023-10-16",
+    type: "invoice.payment_succeeded",
+    livemode: false,
+    pending_webhooks: 1,
+    request: null,
+    data: {
+      object: {
+        id: `in_test_${timestamp}`,
+        object: "invoice",
+        subscription: "sub_test_123",
+        subscription_details: {
+          metadata: { identifier: TEST_ID },
+        },
+      },
+    },
+  };
+
+  const payload = JSON.stringify(invoicePayload);
+  const header = stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: webhookSecret,
+    timestamp,
+  });
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api/stripe/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": header },
+      body: payload,
+    });
+  } catch (e) {
+    fail("T8", `Network error: ${e}`); return;
+  }
+
+  if (res.status !== 200) {
+    const body = await res.text().catch(() => "");
+    fail("T8", `status ${res.status} — ${body.slice(0, 160)}`); return;
+  }
+
+  const val = await redis.get(`pro:${TEST_ID}`);
+  if (val == null || String(val) !== "1") {
+    fail("T8", `Redis key pro:${TEST_ID} not set (got ${JSON.stringify(val)})`); return;
+  }
+
+  const ttl = await redis.ttl(`pro:${TEST_ID}`);
+  const thirtyDays = 30 * 24 * 60 * 60;
+  if (ttl > thirtyDays) {
+    pass("T8", `pro:${TEST_ID} written, TTL ${ttl}s (${Math.round(ttl / 86400)}d) > 30d ✓`);
+  } else {
+    fail("T8", `TTL = ${ttl}s — expected > ${thirtyDays}s (30d)`);
+  }
+
+  await redis.del(`pro:${TEST_ID}`);
+}
+
 async function test7() {
   console.log("\n─── TEST 7: Cleanup ───");
   const redis = Redis.fromEnv();
@@ -212,6 +289,7 @@ async function main() {
   await test5();
   await test6();
   await test7();
+  await test8();
 
   console.log("\n─── Done ───\n");
 }

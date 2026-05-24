@@ -5,8 +5,21 @@
  * Requires dev server on localhost:3000 (npm run dev).
  */
 
+const fs = require("fs") as typeof import("fs");
+const path = require("path") as typeof import("path");
 const JSZip = require("jszip") as typeof import("jszip");
 const initSqlJs = require("sql.js") as () => Promise<SqlJsStatic>;
+
+// ts-node does not load .env.local — read TEST_BYPASS_TOKEN from it if not already set.
+if (!process.env.TEST_BYPASS_TOKEN) {
+  try {
+    const lines = (fs.readFileSync(path.resolve(__dirname, "../.env.local"), "utf8") as string).split("\n");
+    for (const line of lines) {
+      const m = line.match(/^TEST_BYPASS_TOKEN=(.+)$/);
+      if (m) { process.env.TEST_BYPASS_TOKEN = m[1].trim(); break; }
+    }
+  } catch { /* .env.local absent — bypass stays inactive */ }
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +120,7 @@ async function generateDeck(style: Style, density: Density, text: string = SAMPL
   const res = await fetch(`${BASE_URL}/api/generate`, {
     method: "POST",
     body: formData,
+    headers: { "x-test-token": process.env.TEST_BYPASS_TOKEN ?? "" },
     signal: AbortSignal.timeout(120_000),
   });
 
@@ -447,6 +461,7 @@ async function generatePasteDeck(density: Density): Promise<Buffer> {
   const res = await fetch(`${BASE_URL}/api/generate`, {
     method: "POST",
     body: formData,
+    headers: { "x-test-token": process.env.TEST_BYPASS_TOKEN ?? "" },
     signal: AbortSignal.timeout(120_000),
   });
 
