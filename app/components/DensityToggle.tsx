@@ -14,17 +14,17 @@ const OPTIONS: Option[] = [
   {
     value: "high-yield",
     label: "High-Yield",
-    description: "Core concepts & pathways only.",
+    description: "~6–9 cards per page · exam essentials only",
   },
   {
     value: "comprehensive",
     label: "Comprehensive",
-    description: "Includes secondary details & clinical correlations.",
+    description: "~10–14 cards per page · core + supporting detail",
   },
   {
     value: "granular",
     label: "Granular",
-    description: "PhD-level extraction of all testable facts.",
+    description: "~15–18 cards per page · every testable fact",
   },
 ];
 

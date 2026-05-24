@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import {
   computePreset,
   densityToIntensity,
@@ -27,7 +27,7 @@ const DIFFICULTY_OPTIONS: { value: DifficultyAssessment; label: string }[] = [
 ];
 
 const DENSITY_LABELS: Record<string, string> = {
-  "high-yield":    "High-yield",
+  "high-yield":    "High-Yield",
   "comprehensive": "Comprehensive",
   "granular":      "Granular",
 };
@@ -64,7 +64,7 @@ function Field({
       <div className="text-right flex-shrink-0">
         <span className="text-[12px] font-medium text-slate-700 font-mono">{displayVal}</span>
         {open && rationale && (
-          <p className="text-[10px] text-slate-400 leading-relaxed mt-1 max-w-[220px] text-right animate-fade-up">
+          <p className="text-[11px] text-slate-500 leading-relaxed mt-1 max-w-[220px] text-right animate-fade-up">
             {rationale}
           </p>
         )}
@@ -149,6 +149,7 @@ function PresetDisplay({
 }) {
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [embedError, setEmbedError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const rationaleFor = (field: string) =>
     preset.rationale.find((r) => r.field === field)?.reason;
@@ -168,8 +169,6 @@ function PresetDisplay({
       const fd = new FormData();
       fd.append("apkg", new File([apkgBlob], "deck.apkg", { type: "application/octet-stream" }));
       fd.append("preset", JSON.stringify(preset));
-      console.log("Sending preset:", JSON.stringify(preset));
-      console.log("FormData keys:", [...fd.keys()]);
       const res = await fetch("/api/embed-preset", { method: "POST", body: fd });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
@@ -186,7 +185,12 @@ function PresetDisplay({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setEmbedError(err instanceof Error ? err.message : "Download failed. Please try again.");
+      const msg = err instanceof TypeError
+        ? "Connection failed. Check your network and try again."
+        : err instanceof Error && err.message.startsWith("Error ")
+        ? "The server couldn't process this preset. Try recalculating and downloading again."
+        : "Download failed. Please try again.";
+      setEmbedError(msg);
     } finally {
       setIsEmbedding(false);
     }
@@ -197,11 +201,11 @@ function PresetDisplay({
       {/* FSRS disclaimer — positioned above everything else */}
       {useFsrs && (
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-          <p className="text-[10px] text-slate-500 leading-relaxed">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
             <span className="font-semibold text-slate-600">Starting defaults for new decks.</span>{" "}
             Once you have ~1,000 reviews, run{" "}
             <span className="font-medium">FSRS Optimize</span> and{" "}
-            <span className="font-medium">Compute Minimum Recommended Retention</span> in Deck Options — those use your personal data and override this tool&apos;s retention suggestion.
+            <span className="font-medium">Compute Minimum Recommended Retention</span> in Deck Options; those use your personal data and will override this tool&apos;s retention suggestion.
           </p>
         </div>
       )}
@@ -213,7 +217,7 @@ function PresetDisplay({
           { label: "finish date",      val: finishLabel,                       amber: true  },
         ].map(({ label, val, amber }) => (
           <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-1.5 text-center">
-            <p className={["text-[18px] font-semibold leading-none", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
+            <p className={["text-[18px] font-semibold leading-none tabular-nums", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
             <p className="text-[10px] text-slate-400 mt-1 tracking-wide">{label}</p>
           </div>
         ))}
@@ -222,7 +226,7 @@ function PresetDisplay({
       {/* FSRS simulator nudge */}
       {useFsrs && (
         <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-          Review load grows over time. For an accurate forecast, use{" "}
+          To forecast review load, use{" "}
           <span className="font-medium text-slate-500">Deck Options → FSRS → Workload</span>{" "}
           after ~1,000 reviews.
         </p>
@@ -242,44 +246,66 @@ function PresetDisplay({
         </div>
       )}
 
-      {/* Rationale hint — above the grid so users see it before interacting */}
+      {/* Daily Limits — always visible */}
+      <Section title="Daily Limits">
+        <Field label="New cards / day"       value={preset.new_cards_per_day}       rationale={rationaleFor("new_cards_per_day")} />
+        <Field label="Max reviews / day"     value={preset.maximum_reviews_per_day} rationale={rationaleFor("maximum_reviews_per_day")} />
+        <Field label="Ignore review limit"   value={preset.new_cards_ignore_review_limit} />
+        <Field label="Limits from top"       value={preset.limits_start_from_top} />
+      </Section>
+
+      {/* Rationale hint — below Daily Limits, adjacent to the fields it describes */}
       <p className="text-[10px] text-slate-400 text-center tracking-wide -mb-1">
         Tap <span className="font-bold text-slate-500">?</span> next to any field for the reasoning.
       </p>
 
-      {/* Preset sections — 1-col on mobile, 2-col on tablet+ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <Section title="Daily Limits">
-          <Field label="New cards / day"       value={preset.new_cards_per_day}                   rationale={rationaleFor("new_cards_per_day")} />
-          <Field label="Max reviews / day"     value={preset.maximum_reviews_per_day}             rationale={rationaleFor("maximum_reviews_per_day")} />
-          <Field label="Ignore review limit"   value={preset.new_cards_ignore_review_limit} />
-          <Field label="Limits from top"       value={preset.limits_start_from_top} />
-        </Section>
-
-        <Section title="New Cards">
-          <Field label="Learning steps"        value={preset.learning_steps}                      rationale={rationaleFor("learning_steps")} />
-          {!preset.fsrs_enabled && (
-            <Field label="Graduating interval" value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
-          )}
-          {!preset.fsrs_enabled && (
-            <Field label="Easy interval"       value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
-          )}
-          <Field label="Insertion order"       value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
-        </Section>
-
-        <Section title="Lapses">
-          <Field label="Relearning steps"      value={preset.relearning_steps}                    rationale={rationaleFor("relearning_steps")} />
-          <Field label="Min interval"          value={`${preset.minimum_interval}d`}              rationale={rationaleFor("minimum_interval")} />
-          <Field label="Leech threshold"       value={preset.leech_threshold}                     rationale={rationaleFor("leech_threshold")} />
-          <Field label="Leech action"          value={preset.leech_action === "tag_only" ? "Tag only" : "Suspend"} rationale={rationaleFor("leech_action")} />
-        </Section>
-
-        {useFsrs && (
-          <Section title="FSRS">
-            <Field label="FSRS enabled"      value={true} />
-            <Field label="Desired retention" value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
-            <Field label="Max interval"      value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
+      {/* Advanced sections — revealed on demand */}
+      {showAdvanced && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-fade-in">
+          <Section title="New Cards">
+            <Field label="Learning steps"        value={preset.learning_steps}                      rationale={rationaleFor("learning_steps")} />
+            {!preset.fsrs_enabled && (
+              <Field label="Graduating interval" value={`${preset.graduating_interval}d`}           rationale={rationaleFor("graduating_interval")} />
+            )}
+            {!preset.fsrs_enabled && (
+              <Field label="Easy interval"       value={`${preset.easy_interval}d`}                 rationale={rationaleFor("easy_interval")} />
+            )}
+            <Field label="Insertion order"       value={preset.insertion_order === "random" ? "Random" : "Sequential"} rationale={rationaleFor("insertion_order")} />
           </Section>
+
+          <Section title="Lapses">
+            <Field label="Relearning steps"      value={preset.relearning_steps}                    rationale={rationaleFor("relearning_steps")} />
+            <Field label="Min interval"          value={`${preset.minimum_interval}d`}              rationale={rationaleFor("minimum_interval")} />
+            <Field label="Leech threshold"       value={preset.leech_threshold}                     rationale={rationaleFor("leech_threshold")} />
+            <Field label="Leech action"          value={preset.leech_action === "tag_only" ? "Tag only" : "Suspend"} rationale={rationaleFor("leech_action")} />
+          </Section>
+
+          {useFsrs && (
+            <Section title="FSRS">
+              <Field label="FSRS enabled"      value={true} />
+              <Field label="Desired retention" value={`${(preset.desired_retention * 100).toFixed(0)}%`} rationale={rationaleFor("desired_retention")} />
+              <Field label="Max interval"      value={preset.maximum_interval === 36500 ? "36500d (100 yr)" : `${preset.maximum_interval}d`} rationale={rationaleFor("maximum_interval")} />
+            </Section>
+          )}
+        </div>
+      )}
+
+      {/* Disclosure toggle */}
+      <div className="flex flex-col items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((a) => !a)}
+          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 rounded"
+        >
+          Advanced settings
+          <ChevronDown
+            className={["w-3 h-3 transition-transform duration-200", showAdvanced ? "rotate-180" : ""].join(" ")}
+          />
+        </button>
+        {!showAdvanced && (
+          <p className="text-[10px] text-slate-300">
+            {useFsrs ? "New Cards · Lapses · FSRS" : "New Cards · Lapses"}
+          </p>
         )}
       </div>
 
@@ -342,6 +368,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const [manualCardCount, setManualCardCount]    = useState(() =>
     genInfo?.cardCount != null ? String(genInfo.cardCount) : ""
   );
+  const [calcId, setCalcId]                     = useState(0);
 
   // live card count — starts from prop, updates when regeneration succeeds
   const [liveCardCount, setLiveCardCount]    = useState<number | null>(null);
@@ -388,6 +415,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
         fsrs_enabled: useFsrs,
       })
     );
+    setCalcId((n) => n + 1);
     setInputsCollapsed(true);
   }
 
@@ -445,6 +473,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           fsrs_enabled: useFsrs,
         })
       );
+      setCalcId((n) => n + 1);
     } catch (err) {
       console.error("Regeneration failed:", err);
     } finally {
@@ -458,11 +487,11 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
     <div className="w-full flex flex-col gap-2">
       {/* STATIC — never inside any animated container */}
       <div className="text-center space-y-1 relative flex-shrink-0 min-h-[44px]">
-        <h2 className="text-base font-sans font-medium text-slate-800 tracking-tight">
+        <h2 className="text-base font-medium text-slate-800 tracking-tight">
           Settings Recommender
         </h2>
         <p className="text-[11px] text-slate-400 tracking-wide">
-          Starting defaults for new decks. For personalized tuning, run FSRS Optimize after ~1,000 reviews.
+          Anki settings calibrated to your deck, exam date, and study budget.
         </p>
       </div>
 
@@ -514,7 +543,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
               type="number"
               min={1}
               value={manualCardCount}
-              onChange={(e) => setManualCardCount(e.target.value)}
+              onChange={(e) => { const v = e.target.value; if (v === "" || Number(v) >= 1) setManualCardCount(v); }}
               placeholder="number of cards in your deck"
               className="w-full px-4 py-1.5 rounded-full border border-[#f0c87a] bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#c97f1a] transition-colors text-center"
             />
@@ -540,14 +569,14 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
               Goal
             </label>
-            <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full">
+            <div className="bg-[#f5f3ee] rounded-2xl sm:rounded-full p-[3px] grid grid-cols-2 sm:flex w-full gap-[3px] sm:gap-0">
               {GOAL_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setGoal(opt.value)}
                   className={[
-                    "relative flex-1 py-[7px] rounded-full text-[10px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
+                    "relative sm:flex-1 py-[7px] rounded-full text-[10px] text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
                     goal === opt.value
                       ? "text-[#7a4f0d] font-medium"
                       : "text-slate-400 hover:text-slate-600",
@@ -622,19 +651,21 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       {inputsCollapsed && (
         <div key="pills" className="w-full flex items-stretch gap-2 animate-fade-in">
           {([
-            { label: "FSRS",       value: useFsrs ? "On" : "Off" },
-            { label: "Cards",      value: String(cardCount ?? "—") },
-            { label: "Days",       value: daysUntilExam || "—" },
-            { label: "Goal",       value: GOAL_OPTIONS.find((o) => o.value === goal)?.label ?? goal },
+            { label: "FSRS",    value: useFsrs ? "On" : "Off" },
+            { label: "Cards",   value: String(cardCount ?? "—") },
+            { label: "Days",    value: daysUntilExam || "—" },
+            { label: "Goal",    value: GOAL_OPTIONS.find((o) => o.value === goal)?.label ?? goal },
+            { label: "Diff",    value: difficulty.charAt(0).toUpperCase() + difficulty.slice(1) },
+            ...(budget ? [{ label: "Min/day", value: budget }] : []),
           ] as { label: string; value: string }[]).map(({ label, value }) => (
             <div
               key={label}
-              className="flex-1 flex flex-col items-center gap-0.5 bg-[#fef8ee] border border-[#f0c87a] rounded-2xl px-2 py-2"
+              className="flex-1 min-w-0 flex flex-col items-center gap-0.5 bg-[#fef8ee] border border-[#f0c87a] rounded-2xl px-2 py-2"
             >
               <span className="text-[8px] font-semibold uppercase tracking-widest text-[#c97f1a]">
                 {label}
               </span>
-              <span className="text-[11px] font-medium text-[#7a4f0d] leading-tight text-center">
+              <span className="text-[11px] font-medium text-[#7a4f0d] leading-tight text-center truncate w-full">
                 {value}
               </span>
             </div>
@@ -674,6 +705,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       {preset && (
         <div ref={presetOutputRef} tabIndex={-1} aria-live="polite" className="mt-2 w-full animate-fade-up outline-none">
           <PresetDisplay
+            key={calcId}
             preset={preset}
             useFsrs={useFsrs}
             apkgBlob={apkgBlob}

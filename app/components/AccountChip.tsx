@@ -34,6 +34,7 @@ export default function AccountChip() {
   if (!isSignedIn) {
     return (
       <motion.button
+        type="button"
         onClick={() => { posthog.capture("sign_in_clicked"); openSignIn(); }}
         className="bg-[#c97f1a] text-white text-xs font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
         whileHover={{ scale: 1.05 }}
@@ -46,11 +47,11 @@ export default function AccountChip() {
   }
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex items-center gap-1.5">
       <UserButton />
       {isPro && (
-        <span className="text-[9px] font-semibold px-1 py-px rounded-full border border-[#c97f1a] text-[#7a4f0d] bg-[#fef8ee] uppercase tracking-tight leading-none mt-0.5">
-          PRO
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[#f0c87a] text-[#7a4f0d] bg-[#fef8ee] uppercase tracking-wide leading-none">
+          Pro
         </span>
       )}
     </div>

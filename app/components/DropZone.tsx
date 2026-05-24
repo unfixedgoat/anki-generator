@@ -218,9 +218,20 @@ export default function DropZone({ onGenerated }: Props) {
       } catch (err) {
         clearProgressTimers();
         setLoadingStep(null);
-        const msg = err instanceof Error ? err.message : String(err);
+        const name = err instanceof Error ? err.name : "";
+        const msg  = err instanceof Error ? err.message : String(err);
         console.error("[pdfExtract]", msg);
-        setErrorMsg(`Could not read this PDF. Try a different file or paste the text instead.`);
+        let userMsg: string;
+        if (name === "PasswordException") {
+          userMsg = "This PDF is password-protected. Remove the password and try again.";
+        } else if (name === "InvalidPDFException") {
+          userMsg = "This PDF couldn't be read. Try re-exporting it from the original application.";
+        } else if (msg.includes("PDF library not ready")) {
+          userMsg = "PDF reader not ready — wait a moment and try again.";
+        } else {
+          userMsg = "Couldn't extract text from this PDF. Try converting it to a new PDF using Preview or Adobe.";
+        }
+        setErrorMsg(userMsg);
         setState("error");
         return;
       }
@@ -228,7 +239,7 @@ export default function DropZone({ onGenerated }: Props) {
       if (!text) {
         clearProgressTimers();
         setLoadingStep(null);
-        setErrorMsg("This PDF contains no extractable text (it may be scanned). Try pasting the text instead.");
+        setErrorMsg("This PDF contains scanned images with no text layer. Export a text-based version from your source and try again.");
         setState("error");
         return;
       }
@@ -368,6 +379,7 @@ export default function DropZone({ onGenerated }: Props) {
       <p className="text-xs text-slate-400">{elapsed}s</p>
       {loadingStep !== 3 && (
         <motion.button
+          type="button"
           onClick={cancel}
           className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
           whileHover={{ scale: 1.02 }}
@@ -390,13 +402,15 @@ export default function DropZone({ onGenerated }: Props) {
         <p className="text-sm font-medium text-[#7a4f0d] font-serif">Deck downloaded</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
-      <span
+      <button
+        type="button"
         onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
-        className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 cursor-pointer block text-center mt-2"
+        className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 block text-center mt-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c97f1a] rounded"
       >
         Report a problem with this deck
-      </span>
+      </button>
       <button
+        type="button"
         onClick={reset}
         className="absolute bottom-5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
       >
@@ -409,10 +423,11 @@ export default function DropZone({ onGenerated }: Props) {
     <>
       <AlertCircle className="w-8 h-8 text-red-600" strokeWidth={1.5} />
       <div className="text-center space-y-1.5">
-        <p className="text-sm font-medium text-slate-700 tracking-wide">Something went wrong</p>
-        <p className="text-xs text-red-600 max-w-xs px-4 leading-relaxed">{errorMsg}</p>
+        <p className="text-sm font-semibold text-red-700 tracking-wide">Something went wrong</p>
+        <p className="text-xs text-slate-600 max-w-xs px-4 leading-relaxed">{errorMsg}</p>
       </div>
       <button
+        type="button"
         onClick={reset}
         className="absolute bottom-5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
       >
@@ -428,9 +443,11 @@ export default function DropZone({ onGenerated }: Props) {
       {/* Mode toggle */}
       <div className="bg-[#f5f3ee] rounded-full p-[3px] flex w-full select-none">
         <button
+          type="button"
           onClick={() => switchMode("pdf")}
           className={[
             "relative flex-1 text-center py-[7px] rounded-full text-[11px]",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
             inputType === "pdf"
               ? "text-[#7a4f0d] font-medium"
               : "text-slate-400",
@@ -446,9 +463,11 @@ export default function DropZone({ onGenerated }: Props) {
           <span className="relative z-10">Upload</span>
         </button>
         <button
+          type="button"
           onClick={() => switchMode("text")}
           className={[
             "relative flex-1 text-center py-[7px] rounded-full text-[11px]",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1 focus-visible:ring-offset-[#f5f3ee]",
             inputType === "text"
               ? "text-[#7a4f0d] font-medium"
               : "text-slate-400",
@@ -492,7 +511,12 @@ export default function DropZone({ onGenerated }: Props) {
           tabIndex={isBusy ? -1 : 0}
           aria-label="Upload PDF"
           onClick={openPicker}
-          onKeyDown={(e) => e.key === "Enter" && openPicker()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openPicker();
+            }
+          }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
@@ -572,7 +596,7 @@ export default function DropZone({ onGenerated }: Props) {
               <textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) { e.preventDefault(); processText(); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); processText(); } }}
                 placeholder="Paste your notes, lecture text, or study material here…"
                 className={[
                   "flex-1 w-full px-5 pt-4 pb-2",
@@ -582,10 +606,26 @@ export default function DropZone({ onGenerated }: Props) {
                 ].join(" ")}
               />
               <div className="flex items-center shrink-0 px-5 py-3">
-                <span className="hidden md:block text-xs text-slate-400 select-none pointer-events-none">
-                  ⌘↵ to generate
-                </span>
+                {rawText.length > 0 ? (
+                  <span className={[
+                    "text-xs select-none pointer-events-none tabular-nums",
+                    rawText.length >= 50_000
+                      ? "text-red-500"
+                      : rawText.length > 45_000
+                      ? "text-amber-500"
+                      : "text-slate-400",
+                  ].join(" ")}>
+                    {rawText.length >= 50_000
+                      ? "Limit reached"
+                      : `${(50_000 - rawText.length).toLocaleString()} left`}
+                  </span>
+                ) : (
+                  <span className="hidden md:block text-xs text-slate-400 select-none pointer-events-none">
+                    ⌘↵ to generate
+                  </span>
+                )}
                 <motion.button
+                  type="button"
                   onClick={processText}
                   disabled={!rawText.trim()}
                   className={[
