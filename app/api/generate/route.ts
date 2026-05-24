@@ -183,6 +183,26 @@ function repairJson(str: string): string {
 }
 
 function extractJson(raw: string): RawCard[] {
+  // Pre-pass: recover truncated arrays (missing closing ]) by finding the last }
+  // and appending ]. Runs before the regex match so it handles responses that were
+  // cut off mid-stream without a closing bracket.
+  const arrayStart = raw.indexOf("[");
+  if (arrayStart !== -1) {
+    const slice = raw.slice(arrayStart);
+    const lastBrace = slice.lastIndexOf("}");
+    if (lastBrace !== -1) {
+      try {
+        const candidate = slice.slice(0, lastBrace + 1) + "]";
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return (parsed as RawCard[]).map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
+        }
+      } catch {
+        // fall through to existing tiers
+      }
+    }
+  }
+
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error("No JSON array found in model response");
   const jsonStr = match[0];
@@ -220,27 +240,38 @@ function sanitizeFilename(name: string): string {
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   const forwarded = req.headers.get("x-forwarded-for") ?? "";
-  const realIp = forwarded.split(",").at(-1)?.trim() || null;
+  // Use the first (leftmost) IP: that is the original client IP that the
+  // load-balancer saw. Subsequent entries are added by intermediary proxies;
+  // taking the last entry gives the proxy IP (::1 in dev), not the client.
+  const realIp = forwarded.split(",")[0]?.trim() || null;
   const identifier: string | null = userId ?? realIp;
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   } else {
-    const pro = await isPro(identifier);
-    if (!pro) {
-      const limitKey = identifier ?? "anonymous";
-      const { success, limit, remaining, reset } = await ratelimit.limit(limitKey);
-      if (!success) {
-        return NextResponse.json(
-          { error: "Free limit reached", limit, remaining, reset, upgrade: "https://highyield.cards" },
-          { status: 429 }
-        );
+    // TEST BYPASS: when TEST_BYPASS_TOKEN is set and the request carries a matching
+    // X-Test-Token header, skip rate limiting entirely. TEST_BYPASS_TOKEN must NEVER
+    // be added to Vercel production environment variables — dev/CI only.
+    const bypassToken = process.env.TEST_BYPASS_TOKEN;
+    const bypassRateLimit = bypassToken && req.headers.get("x-test-token") === bypassToken;
+
+    if (!bypassRateLimit) {
+      const pro = await isPro(identifier);
+      if (!pro) {
+        const limitKey = identifier ?? "anonymous";
+        const { success, limit, remaining, reset } = await ratelimit.limit(limitKey);
+        if (!success) {
+          return NextResponse.json(
+            { error: "Free limit reached", limit, remaining, reset, upgrade: "https://highyield.cards" },
+            { status: 429 }
+          );
+        }
       }
     }
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY is not set" }, { status: 500 });
+    return NextResponse.json({ error: "Service unavailable" }, { status: 500 });
   }
 
   let documentText: string;

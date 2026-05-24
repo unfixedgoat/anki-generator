@@ -17,9 +17,18 @@ interface SqlModule {
   Database: new (data?: Uint8Array) => SqlDatabase;
 }
 
+const ALLOWED_PRESET_KEYS = new Set([
+  "new_cards_per_day", "maximum_reviews_per_day", "new_cards_ignore_review_limit",
+  "limits_start_from_top", "learning_steps", "insertion_order", "relearning_steps",
+  "minimum_interval", "leech_threshold", "leech_action", "desired_retention",
+  "maximum_interval", "estimated_daily_new_cards", "estimated_finish_date",
+  "warnings", "rationale", "fsrs_enabled", "graduating_interval", "easy_interval",
+]);
+
 function isValidPreset(p: unknown): p is AnkiPreset {
   if (typeof p !== "object" || p === null) return false;
   const r = p as Record<string, unknown>;
+  if (Object.keys(r).some(k => !ALLOWED_PRESET_KEYS.has(k))) return false;
   // Fields required by both FsrsOnPreset and Sm2Preset
   if (typeof r.new_cards_per_day !== "number" || !isFinite(r.new_cards_per_day)) return false;
   if (typeof r.maximum_reviews_per_day !== "number" || !isFinite(r.maximum_reviews_per_day)) return false;
@@ -134,7 +143,7 @@ export async function POST(req: NextRequest) {
     if (!pro) {
       const { success } = await ratelimit.limit(realIp);
       if (!success) {
-        return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+        return NextResponse.json({ error: "Free limit reached" }, { status: 429 });
       }
     }
   }
@@ -161,20 +170,43 @@ export async function POST(req: NextRequest) {
   }
 
   let patchedBytes: Uint8Array;
+
+  // Phase 1: unzip — malformed archive is a client error.
+  const zip = await JSZip.loadAsync(apkgBytes).catch(() => null);
+  if (!zip) {
+    return NextResponse.json({ error: "Uploaded file is not a valid zip archive" }, { status: 400 });
+  }
+
+  // Phase 2: locate collection.anki2 — missing file is a client error.
+  const dbFilename = "collection.anki2";
+  const dbFile = zip.file(dbFilename);
+  if (!dbFile) {
+    return NextResponse.json({ error: "No collection.anki2 found in uploaded file" }, { status: 400 });
+  }
+  const dbBytes = new Uint8Array(await dbFile.async("arraybuffer"));
+
+  // Validate SQLite magic bytes before handing the buffer to sql.js.
+  // sql.js's Database constructor accepts bad data silently and only throws
+  // later on exec(), so check the first 16 bytes ourselves — client error.
+  const SQLITE_MAGIC = Buffer.from("SQLite format 3\0");
+  if (dbBytes.length < 16 || !SQLITE_MAGIC.equals(Buffer.from(dbBytes.slice(0, 16)))) {
+    return NextResponse.json({ error: "Invalid Anki file. Try regenerating the deck." }, { status: 400 });
+  }
+
+  // Phase 3: open SQLite — corrupted bytes are a client error.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const initSqlJs = require("sql.js") as () => Promise<SqlModule>;
+  const SQL = await initSqlJs();
+  // Definite assignment: phase 3 either assigns db or returns 400.
+  let db!: SqlDatabase;
   try {
-    // Unzip the .apkg
-    const zip = await JSZip.loadAsync(apkgBytes);
-    const dbFilename = "collection.anki2";
-    const dbFile = zip.file(dbFilename);
-    if (!dbFile) throw new Error("No collection.anki2 found in .apkg");
-    const dbBytes = new Uint8Array(await dbFile.async("arraybuffer"));
+    db = new SQL.Database(dbBytes);
+  } catch {
+    return NextResponse.json({ error: "Invalid Anki file. Try regenerating the deck." }, { status: 400 });
+  }
 
-    // Open existing SQLite database
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const initSqlJs = require("sql.js") as () => Promise<SqlModule>;
-    const SQL = await initSqlJs();
-    const db = new SQL.Database(dbBytes);
-
+  // Phase 4: patch dconf and re-export — unexpected failures here are server errors.
+  try {
     // Read current dconf and decks
     const rows = db.exec("SELECT dconf, decks FROM col WHERE id = 1");
     if (!rows.length || !rows[0].values.length) throw new Error("col table is empty");
@@ -239,6 +271,7 @@ export async function POST(req: NextRequest) {
     patchedBytes = outBuffer;
   } catch (err) {
     console.error("[embed-preset] Processing error:", err);
+    try { db.close(); } catch { /* already closed */ }
     return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
 

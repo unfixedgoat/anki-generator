@@ -16,11 +16,11 @@ interface Props {
 const CONTENT: Record<Reason, { title: string; subtitle: string }> = {
   limit: {
     title: "You've used your 5 free decks this month",
-    subtitle: "Upgrade for unlimited generations, all styles, and all density modes.",
+    subtitle: "Upgrade for unlimited generations and higher document limits.",
   },
   characters: {
     title: "Your document exceeds the free limit",
-    subtitle: "Free accounts support up to 50,000 characters (~10 dense pages). Upgrade for 300,000 character documents.",
+    subtitle: "Free accounts support up to 50,000 characters (~10 dense pages). Upgrade to process documents up to 300,000 characters.",
   },
 };
 

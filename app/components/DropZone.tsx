@@ -220,7 +220,7 @@ export default function DropZone({ onGenerated }: Props) {
         setLoadingStep(null);
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[pdfExtract]", msg);
-        setErrorMsg(`Could not extract text: ${msg}`);
+        setErrorMsg(`Could not read this PDF. Try a different file or paste the text instead.`);
         setState("error");
         return;
       }
@@ -394,7 +394,7 @@ export default function DropZone({ onGenerated }: Props) {
         onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
         className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 cursor-pointer block text-center mt-2"
       >
-        Report a bad deck
+        Report a problem with this deck
       </span>
       <button
         onClick={reset}
@@ -473,7 +473,7 @@ export default function DropZone({ onGenerated }: Props) {
         <textarea
           value={customPrompt}
           onChange={(e) => setCustomPrompt(e.target.value)}
-          placeholder="Describe exactly how you want Gemini to format your cards…"
+          placeholder="Describe exactly how you want your cards formatted…"
           disabled={isBusy}
           className={[
             "w-full h-28 px-4 py-3 rounded-2xl border border-slate-200 bg-white",

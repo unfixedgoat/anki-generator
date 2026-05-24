@@ -14,8 +14,8 @@ import {
 import { type GenerationInfo } from "./DropZone";
 
 const GOAL_OPTIONS: { value: GoalProfile; label: string; sub: string }[] = [
-  { value: "cram",             label: "Cram",      sub: "Optimize for exam date, retention not prioritized" },
-  { value: "exam_then_retain", label: "Ace & Keep", sub: "Ace exam, want it to stick" },
+  { value: "cram",             label: "Cram",      sub: "Pass the exam — long-term retention not required" },
+  { value: "exam_then_retain", label: "Ace & Keep", sub: "Ace the exam and retain it long-term" },
   { value: "balanced",         label: "Balanced",  sub: "Long-term with exam milestone" },
   { value: "long_term",        label: "Long-term", sub: "No exam, permanent memory" },
 ];
@@ -186,7 +186,7 @@ function PresetDisplay({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setEmbedError(err instanceof Error ? err.message : "Embed failed");
+      setEmbedError(err instanceof Error ? err.message : "Download failed. Please try again.");
     } finally {
       setIsEmbedding(false);
     }
@@ -210,7 +210,7 @@ function PresetDisplay({
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: "new cards / day", val: preset.estimated_daily_new_cards, amber: false },
-          { label: "new cards done",  val: finishLabel,                       amber: true  },
+          { label: "finish date",      val: finishLabel,                       amber: true  },
         ].map(({ label, val, amber }) => (
           <div key={label} className="bg-white border border-slate-100 rounded-xl px-3 py-1.5 text-center">
             <p className={["text-[18px] font-semibold leading-none", amber ? "text-[#c97f1a]" : "text-slate-800"].join(" ")}>{val}</p>
@@ -462,7 +462,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
           Settings Recommender
         </h2>
         <p className="text-[11px] text-slate-400 tracking-wide">
-          Starting defaults for new decks — for personalized tuning, use FSRS Optimize after ~1,000 reviews
+          Starting defaults for new decks. For personalized tuning, run FSRS Optimize after ~1,000 reviews.
         </p>
       </div>
 
@@ -603,7 +603,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             </fieldset>
             <div className="flex-1 flex flex-col gap-1.5">
               <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 text-center">
-                Min / day budget
+                Minutes per day
               </label>
               <input
                 type="number"

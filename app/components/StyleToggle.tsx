@@ -20,7 +20,7 @@ interface Option {
 
 const OPTIONS: Option[] = [
   { value: "standard", label: "Standard", subtitle: "Q&A sentence" },
-  { value: "cloze",    label: "Cloze",    subtitle: "Fill in blank" },
+  { value: "cloze",    label: "Cloze",    subtitle: "Fill in the blank" },
   { value: "concise",  label: "Concise",  subtitle: "Short answer" },
   { value: "essay",    label: "Essay",    subtitle: "Long form" },
   { value: "mcq",      label: "MCQ",      subtitle: "4 choices" },

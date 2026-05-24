@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const price = prices.data[0];
   if (!price) {
     return NextResponse.json(
-      { error: `No price found for lookup key "${lookupKey}"` },
+      { error: "Payment configuration error" },
       { status: 400 }
     );
   }
