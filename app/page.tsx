@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
 import AccountChip from "@/app/components/AccountChip";
+import { APP_VERSION } from "@/app/version";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
@@ -16,6 +17,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
+          <span className="text-[10px] text-slate-300 font-mono ml-1">{APP_VERSION}</span>
         </div>
         <p className="hidden sm:block absolute left-1/2 -translate-x-1/2 text-sm text-slate-400 font-serif italic pointer-events-none">
           Drop your syllabus. Get an Anki deck built around your exam date.
