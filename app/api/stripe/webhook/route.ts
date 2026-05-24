@@ -81,14 +81,18 @@ export async function POST(req: NextRequest) {
     }
   } else if (event.type === "invoice.payment_succeeded") {
     const invoice = event.data.object as Stripe.Invoice;
-    let identifier = invoice.subscription_details?.metadata?.identifier;
-    if (!identifier && invoice.subscription) {
-      const subId =
-        typeof invoice.subscription === "string"
-          ? invoice.subscription
-          : invoice.subscription.id;
-      const sub = await stripe.subscriptions.retrieve(subId);
-      identifier = sub.metadata?.identifier;
+    let identifier: string | undefined;
+    const subDetails = invoice.parent?.subscription_details;
+    if (subDetails) {
+      identifier = subDetails.metadata?.identifier ?? undefined;
+      if (!identifier && subDetails.subscription) {
+        const subId =
+          typeof subDetails.subscription === "string"
+            ? subDetails.subscription
+            : (subDetails.subscription as Stripe.Subscription).id;
+        const sub = await stripe.subscriptions.retrieve(subId);
+        identifier = sub.metadata?.identifier;
+      }
     }
     if (!identifier) {
       console.warn("[stripe webhook] invoice.payment_succeeded: no identifier found, skipping");
