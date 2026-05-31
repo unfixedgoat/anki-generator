@@ -2,30 +2,46 @@
 /**
  * verify-caps.ts — Three-part verification script
  *
- * TEST 1: Character cap check — expects 400 for 51,000-char input
- * TEST 2: Normal generation   — expects 200 with non-empty blob
- * TEST 3: Rate limit check    — temporarily patches ratelimit.ts to 1/1m,
- *                               expects first POST → 200, second → 429
+ * TEST 1: Tiered character caps — seeds pro:/credit: in Redis (the same keys the
+ *                                 webhook writes and route.ts reads) and asserts:
+ *                                   free   → capped at 50k  (50,001 chars → 400)
+ *                                   Pro    → capped at 300k (50,001 passes, 300,001 → 400)
+ *                                   credit → capped at 300k (50,001 passes, 300,001 → 400)
+ *                                 The Pro/credit 50,001-char probes pass the cap
+ *                                 gate and therefore trigger a real generation.
+ * TEST 2: Normal generation     — expects 200 with non-empty blob
+ * TEST 3: Rate limit check      — temporarily patches ratelimit.ts to 1/1m,
+ *                                 expects first POST → 200, second → 429
  *
  * Requires dev server on localhost:3000.
  */
 
 import * as fs from "fs";
 import * as path from "path";
+import { Redis } from "@upstash/redis";
 
 const BASE_URL = "http://localhost:3000";
 
-// Load bypass token from .env.local so T2 is not throttled by prior test runs.
-let BYPASS_TOKEN = process.env.TEST_BYPASS_TOKEN ?? "";
-if (!BYPASS_TOKEN) {
+// Load .env.local into process.env (without overwriting already-set vars) so the
+// script can authenticate bypass requests (T2) AND seed Redis the same way the
+// app does — Redis.fromEnv() reads UPSTASH_REDIS_REST_URL / _TOKEN, which the
+// tiered-cap test (T1) needs in order to write pro:/credit: keys.
+function loadEnvLocal(): void {
   try {
     const lines = fs.readFileSync(path.resolve(__dirname, "../.env.local"), "utf8").split("\n");
     for (const line of lines) {
-      const m = line.match(/^TEST_BYPASS_TOKEN=(.+)$/);
-      if (m) { BYPASS_TOKEN = m[1].trim(); break; }
+      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      if (!m || process.env[m[1]] !== undefined) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      process.env[m[1]] = val;
     }
   } catch { /* .env.local absent */ }
 }
+loadEnvLocal();
+const BYPASS_TOKEN = process.env.TEST_BYPASS_TOKEN ?? "";
 const RATELIMIT_PATH = path.resolve(__dirname, "../app/lib/ratelimit.ts");
 
 const ORIGINAL_LIMIT = `slidingWindow(5, "30 d")`;
@@ -63,37 +79,99 @@ function fail(label: string, detail: string) {
   console.log(`  FAIL  ${label} — ${detail}`);
 }
 
-async function test1(): Promise<void> {
-  console.log("\n─── TEST 1: Character cap check (51,000-char input → expect 400) ───");
-
-  const bigText = "a".repeat(51_000);
+// Send `textLength` chars to /api/generate under `identifier` (resolved from
+// x-forwarded-for via clientIp, exactly as route.ts does) and report whether the
+// route rejected it specifically at the character cap. The route's cap rejection
+// is the ONLY 400 carrying { error: "characters" }; anything else (200 blob,
+// 422/502/500 from generation, 503 from the global Gemini ceiling) means the
+// payload PASSED the cap gate — which is all this test cares about.
+async function probeCharCap(
+  identifier: string,
+  textLength: number
+): Promise<{ status: number; charCapRejected: boolean }> {
   const fd = new FormData();
-  fd.append("text", bigText);
+  fd.append("text", "a".repeat(textLength));
   fd.append("density", "high-yield");
   fd.append("style", "standard");
 
-  let status: number;
+  const res = await fetch(`${BASE_URL}/api/generate`, {
+    method: "POST",
+    body: fd,
+    headers: { "x-forwarded-for": identifier },
+  });
+
+  let charCapRejected = false;
+  if (res.status === 400) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    charCapRejected = body?.error === "characters";
+  } else {
+    await res.arrayBuffer().catch(() => {}); // drain (a passing probe returns a blob)
+  }
+  return { status: res.status, charCapRejected };
+}
+
+async function test1(): Promise<void> {
+  console.log("\n─── TEST 1: Tiered character caps (free 50k · Pro 300k · credit 300k) ───");
+
+  let redis: Redis;
   try {
-    // Use a unique identifier so this test never hits a lingering rate-limit bucket.
-    const res = await fetch(`${BASE_URL}/api/generate`, {
-      method: "POST",
-      body: fd,
-      headers: { "x-forwarded-for": "test-cap-check" },
-    });
-    status = res.status;
+    redis = Redis.fromEnv();
   } catch (e) {
-    fail("T1", `Network error: ${e}`);
+    fail("T1", `Cannot reach Redis to seed Pro/credit tiers: ${e}`);
     return;
   }
 
-  if (status !== 200) {
-    pass("T1", `status ${status} — not 200 ✓`);
-  } else {
-    fail(
-      "T1",
-      `status 200 — no character cap is enforced in route.ts; ` +
-        `add a length guard (e.g. text.length > 50_000 → 400) to make this pass`
-    );
+  // Unique per-run identifiers: avoids polluting the free rate-limit bucket and
+  // avoids colliding with keys a previous run may have left behind.
+  const run = Date.now();
+  const freeId = `test-cap-free-${run}`;
+  const proId = `test-cap-pro-${run}`;
+  const creditId = `test-cap-credit-${run}`;
+
+  // Seed the SAME keys route.ts reads: pro:<id> makes isPro() true (300k cap);
+  // credit:<id> > 0 takes the credit branch (300k cap, decremented per gen).
+  await redis.set(`pro:${proId}`, "1");
+  await redis.set(`credit:${creditId}`, 5);
+
+  try {
+    // FREE — must be capped at 50k: 50,001 chars → character-cap 400.
+    const free = await probeCharCap(freeId, 50_001);
+    if (free.charCapRejected) {
+      pass("T1-free", "50,001 chars → character-cap 400 (free capped at 50k) ✓");
+    } else {
+      fail("T1-free", `50,001 chars → status ${free.status}, NOT a character-cap rejection (free must not exceed 50k)`);
+    }
+
+    // PRO — must NOT be capped at 50k, and must be capped at 300k.
+    const proAt50k = await probeCharCap(proId, 50_001);
+    if (!proAt50k.charCapRejected) {
+      pass("T1-pro-50k", `50,001 chars → status ${proAt50k.status}, passed the cap gate (Pro not capped at 50k) ✓`);
+    } else {
+      fail("T1-pro-50k", "50,001 chars → character-cap 400 (Pro is wrongly capped at 50k)");
+    }
+    const proAt300k = await probeCharCap(proId, 300_001);
+    if (proAt300k.charCapRejected) {
+      pass("T1-pro-300k", "300,001 chars → character-cap 400 (Pro cap is 300k) ✓");
+    } else {
+      fail("T1-pro-300k", `300,001 chars → status ${proAt300k.status}, NOT rejected (Pro cap exceeds 300k)`);
+    }
+
+    // CREDIT-BACKED — must NOT be capped at 50k, and must be capped at 300k.
+    const creditAt50k = await probeCharCap(creditId, 50_001);
+    if (!creditAt50k.charCapRejected) {
+      pass("T1-credit-50k", `50,001 chars → status ${creditAt50k.status}, passed the cap gate (credit not capped at 50k) ✓`);
+    } else {
+      fail("T1-credit-50k", "50,001 chars → character-cap 400 (credit is wrongly capped at 50k)");
+    }
+    const creditAt300k = await probeCharCap(creditId, 300_001);
+    if (creditAt300k.charCapRejected) {
+      pass("T1-credit-300k", "300,001 chars → character-cap 400 (credit cap is 300k) ✓");
+    } else {
+      fail("T1-credit-300k", `300,001 chars → status ${creditAt300k.status}, NOT rejected (credit cap exceeds 300k)`);
+    }
+  } finally {
+    // Remove seeded keys so a later caller reusing the identifier isn't entitled.
+    await redis.del(`pro:${proId}`, `credit:${creditId}`).catch(() => {});
   }
 }
 
@@ -261,7 +339,7 @@ async function main() {
         "The rate-limit check runs first in route.ts, so every request crashes at Redis.fromEnv().\n\n" +
         "Fix: fill in both values in .env.local (create a free Upstash Redis database at upstash.com,\n" +
         "then copy the REST URL and token), restart the dev server, and re-run this script.\n\n" +
-        "TEST 1: BLOCKED (would need route to run; also no character cap exists in route.ts)\n" +
+        "TEST 1: BLOCKED (tiered cap test needs the route to run and Redis to seed Pro/credit tiers)\n" +
         "TEST 2: BLOCKED (needs working route)\n" +
         "TEST 3: BLOCKED (needs working rate-limit middleware)"
     );
