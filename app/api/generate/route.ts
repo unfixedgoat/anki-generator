@@ -5,6 +5,7 @@ import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
 import { ratelimit, isPro, redis } from "@/app/lib/ratelimit";
 import { clientIp } from "@/app/lib/clientIp";
+import { reserveGeminiCall } from "@/app/lib/geminiCeiling";
 import { getPostHogClient } from "@/app/lib/posthog-server";
 import { trace, context } from "@opentelemetry/api";
 
@@ -345,6 +346,20 @@ export async function POST(req: NextRequest) {
   } catch {
     await refundCredit();
     return NextResponse.json({ error: "Failed to read form data" }, { status: 400 });
+  }
+
+  // Global daily Gemini ceiling — circuit breaker across ALL users/IPs, checked
+  // AFTER per-user caps and immediately BEFORE the Gemini call. This is on the
+  // common path, so the TEST_BYPASS_TOKEN path is ALSO subject to the ceiling
+  // (bypass skips per-user limits, NOT this global breaker). To exempt bypass
+  // instead, lift `bypassRateLimit` into this scope and gate on it here.
+  // Refund any reserved credit so a global trip never burns a paid generation.
+  if (!(await reserveGeminiCall())) {
+    await refundCredit();
+    return new Response(
+      JSON.stringify({ error: "Service temporarily unavailable" }),
+      { status: 503 }
+    );
   }
 
   let rawCards: RawCard[];
