@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { getPostHogClient } from "@/app/lib/posthog-server";
+import { clientIp } from "@/app/lib/clientIp";
 
 type Plan = "pro_monthly" | "pro_annual" | "one_time" | "one_time_deck";
 
@@ -41,8 +42,7 @@ export async function POST(req: NextRequest) {
     customerEmail = primary?.emailAddress;
   }
 
-  const forwarded = req.headers.get("x-forwarded-for") ?? "";
-  const realIp = forwarded.split(",").at(-1)?.trim() || "anonymous";
+  const realIp = clientIp(req);
   const identifier = userId ?? realIp;
 
   const stripe = new Stripe(secretKey);

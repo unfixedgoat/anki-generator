@@ -3,7 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
 import { buildApkg } from "@/app/lib/ankiExport";
-import { ratelimit, isPro } from "@/app/lib/ratelimit";
+import { ratelimit, isPro, redis } from "@/app/lib/ratelimit";
+import { clientIp } from "@/app/lib/clientIp";
 import { getPostHogClient } from "@/app/lib/posthog-server";
 import { trace, context } from "@opentelemetry/api";
 
@@ -239,12 +240,16 @@ function sanitizeFilename(name: string): string {
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  const forwarded = req.headers.get("x-forwarded-for") ?? "";
-  // Use the first (leftmost) IP: that is the original client IP that the
-  // load-balancer saw. Subsequent entries are added by intermediary proxies;
-  // taking the last entry gives the proxy IP (::1 in dev), not the client.
-  const realIp = forwarded.split(",")[0]?.trim() || null;
+  const realIp = clientIp(req);
   const identifier: string | null = userId ?? realIp;
+
+  // Entitlement tier for this request. Defaults to free (50k cap); raised to
+  // 300k for Pro and one-time credit-backed generations. creditReserved gates
+  // the refund-on-failure path further down.
+  let charCap = 50_000;
+  let creditReserved = false;
+  const creditKey = `credit:${identifier ?? "anonymous"}`;
+
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
   } else {
@@ -254,9 +259,23 @@ export async function POST(req: NextRequest) {
     const bypassToken = process.env.TEST_BYPASS_TOKEN;
     const bypassRateLimit = bypassToken && req.headers.get("x-test-token") === bypassToken;
 
-    if (!bypassRateLimit) {
-      const pro = await isPro(identifier);
-      if (!pro) {
+    if (bypassRateLimit) {
+      // Bypass skips rate limiting and credit reservation; still honor the Pro cap.
+      if (await isPro(identifier)) charCap = 300_000;
+    } else if (await isPro(identifier)) {
+      // 1. Pro: unlimited generations, 300k cap.
+      charCap = 300_000;
+    } else {
+      // 2. Reserve a one-time credit atomically. decr-then-check prevents concurrent
+      // overspend; we incr to refund if we over-decremented or a downstream step fails.
+      const creditRemaining = await redis.decr(creditKey);
+      if (creditRemaining >= 0) {
+        // Credit-backed generation: 300k cap, refunded on any downstream failure.
+        charCap = 300_000;
+        creditReserved = true;
+      } else {
+        await redis.incr(creditKey); // undo the over-decrement
+        // 3. Free tier: 5 generations / 30d, 50k cap.
         const limitKey = identifier ?? "anonymous";
         const { success, limit, remaining, reset } = await ratelimit.limit(limitKey);
         if (!success) {
@@ -269,8 +288,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // A reserved one-time credit must not be burned if generation cannot complete.
+  const refundCredit = async () => {
+    if (creditReserved) {
+      creditReserved = false;
+      await redis.incr(creditKey);
+    }
+  };
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    await refundCredit();
     return NextResponse.json({ error: "Service unavailable" }, { status: 500 });
   }
 
@@ -297,14 +325,17 @@ export async function POST(req: NextRequest) {
 
     const text = (formData.get("text") as string | null)?.trim();
     if (!text) {
+      await refundCredit();
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
     documentText = text;
-    if (documentText.length > 50_000) {
-      return NextResponse.json(
-        { error: "characters", message: "Text exceeds 50,000 character limit (~10 dense pages). Upgrade to Pro for 300,000 characters." },
-        { status: 400 }
-      );
+    if (documentText.length > charCap) {
+      await refundCredit();
+      const message =
+        charCap === 50_000
+          ? "Text exceeds 50,000 character limit (~10 dense pages). Upgrade to Pro for 300,000 characters."
+          : `Text exceeds ${charCap.toLocaleString("en-US")} character limit.`;
+      return NextResponse.json({ error: "characters", message }, { status: 400 });
     }
     const filenameFromForm = formData.get("filename") as string | null;
     isPaste = !filenameFromForm;
@@ -312,6 +343,7 @@ export async function POST(req: NextRequest) {
     const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
     deckName = `${baseName} ${ts}`;
   } catch {
+    await refundCredit();
     return NextResponse.json({ error: "Failed to read form data" }, { status: 400 });
   }
 
@@ -354,6 +386,7 @@ export async function POST(req: NextRequest) {
     rawCards = extractJson(text);
   } catch (err) {
     console.error("[generate] Gemini error:", err);
+    await refundCredit();
     return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 502 });
   }
 
@@ -362,6 +395,7 @@ export async function POST(req: NextRequest) {
     cards = await enrichCards(rawCards);
   } catch (err) {
     console.error("[generate] Enrichment error:", err);
+    await refundCredit();
     return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 500 });
   }
 
@@ -388,6 +422,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (cards.length === 0) {
+    await refundCredit();
     return NextResponse.json({ error: "No flashcards could be generated from this document" }, { status: 422 });
   }
 
@@ -396,6 +431,7 @@ export async function POST(req: NextRequest) {
     apkgBuffer = await buildApkg(deckName, cards);
   } catch (err) {
     console.error("[generate] Export error:", err);
+    await refundCredit();
     return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
 

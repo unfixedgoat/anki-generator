@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
 import { auth } from "@clerk/nextjs/server";
 import { ratelimit, isPro } from "@/app/lib/ratelimit";
+import { clientIp } from "@/app/lib/clientIp";
 import { type AnkiPreset } from "@/app/lib/settingsRecommender";
 
 export const maxDuration = 30;
@@ -137,8 +138,7 @@ export async function POST(req: NextRequest) {
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
       return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
     }
-    const forwarded = req.headers.get("x-forwarded-for") ?? "";
-    const realIp = forwarded.split(",").at(-1)?.trim() || "anonymous";
+    const realIp = clientIp(req);
     const pro = await isPro(realIp);
     if (!pro) {
       const { success } = await ratelimit.limit(realIp);
