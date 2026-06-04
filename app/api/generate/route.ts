@@ -262,6 +262,7 @@ export async function POST(req: NextRequest) {
     const bypassRateLimit = bypassToken && req.headers.get("x-test-token") === bypassToken;
 
     pro = await isPro(identifier);
+    if (pro) charCap = 300_000;
     if (bypassRateLimit) {
       // Bypass skips rate limiting and credit reservation; still honor the Pro cap.
       if (pro) charCap = 300_000;
