@@ -376,6 +376,7 @@ export async function POST(req: NextRequest) {
     });
     let response: Awaited<ReturnType<typeof ai.models.generateContent>>;
     try {
+      console.log("GENDBG sentChars", documentText.length);
       response = await context.with(
         trace.setSpan(context.active(), span),
         () =>
@@ -398,11 +399,14 @@ export async function POST(req: NextRequest) {
             ],
           })
       );
+      console.log("GENDBG finish", response.candidates?.[0]?.finishReason);
     } finally {
       span.end();
     }
     const text = response.text ?? "";
+    console.log("GENDBG rawLen", text.length);
     rawCards = extractJson(text);
+    console.log("GENDBG cards", rawCards.length);
   } catch (err) {
     console.error("[generate] Gemini error:", err);
     await refundCredit();
