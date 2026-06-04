@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
     const target = cardTarget(documentText, densityKey);
     const tracer = trace.getTracer("highyield-cards");
 
-    const chunks = chunkText(documentText, 25000);
+    const chunks = chunkText(documentText, 12000);
     console.log("GENDBG chunks", chunks.length);
 
     async function generateChunk(chunk: string, index: number): Promise<RawCard[]> {
@@ -390,7 +390,7 @@ export async function POST(req: NextRequest) {
               model: "gemini-2.5-flash",
               config: {
                 systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-                maxOutputTokens: 24000,
+                maxOutputTokens: 8000,
                 temperature: 0.4,
               },
               contents: [
