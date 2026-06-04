@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { enrichCards, RawCard } from "@/app/lib/visualEnricher";
+import { chunkText } from "@/app/lib/chunkText";
 import { buildApkg } from "@/app/lib/ankiExport";
 import { ratelimit, isPro, redis } from "@/app/lib/ratelimit";
 import { clientIp } from "@/app/lib/clientIp";
@@ -367,46 +368,76 @@ export async function POST(req: NextRequest) {
   }
 
   let rawCards: RawCard[];
+  let partialChunks: { chunksFailed: number; chunksTotal: number } | null = null;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const target = cardTarget(documentText, densityKey);
     const tracer = trace.getTracer("highyield-cards");
-    const span = tracer.startSpan("deck_generation", {
-      attributes: { "posthog.distinct_id": identifier ?? "anonymous" },
-    });
-    let response: Awaited<ReturnType<typeof ai.models.generateContent>>;
-    try {
-      console.log("GENDBG sentChars", documentText.length);
-      response = await context.with(
-        trace.setSpan(context.active(), span),
-        () =>
-          ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            config: {
-              systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-              maxOutputTokens: 65536,
-              temperature: 0.4,
-            },
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${documentText}`,
-                  },
-                ],
+
+    const chunks = chunkText(documentText, 25000);
+    console.log("GENDBG chunks", chunks.length);
+
+    async function generateChunk(chunk: string, index: number): Promise<RawCard[]> {
+      const span = tracer.startSpan("deck_generation", {
+        attributes: { "posthog.distinct_id": identifier ?? "anonymous" },
+      });
+      try {
+        const response = await context.with(
+          trace.setSpan(context.active(), span),
+          () =>
+            ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              config: {
+                systemInstruction: buildSystemInstruction(styleModifier, isPaste),
+                maxOutputTokens: 24000,
+                temperature: 0.4,
               },
-            ],
-          })
-      );
-      console.log("GENDBG finish", response.candidates?.[0]?.finishReason);
-    } finally {
-      span.end();
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${chunk}`,
+                    },
+                  ],
+                },
+              ],
+            })
+        );
+        console.log(`GENDBG [${index}] finish`, response.candidates?.[0]?.finishReason);
+        const text = response.text ?? "";
+        console.log(`GENDBG [${index}] rawLen`, text.length);
+        return extractJson(text);
+      } finally {
+        span.end();
+      }
     }
-    const text = response.text ?? "";
-    console.log("GENDBG rawLen", text.length);
-    rawCards = extractJson(text);
-    console.log("GENDBG cards", rawCards.length);
+
+    const results = await Promise.allSettled(chunks.map((chunk, i) => generateChunk(chunk, i)));
+
+    const fulfilled: RawCard[][] = [];
+    let failCount = 0;
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === "fulfilled") {
+        fulfilled.push(result.value);
+      } else {
+        failCount++;
+        console.error("CHUNKFAIL", i, result.reason);
+      }
+    }
+
+    if (fulfilled.length === 0) {
+      await refundCredit();
+      return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 502 });
+    }
+
+    rawCards = fulfilled.flat();
+    console.log("GENDBG mergedCards", rawCards.length);
+
+    if (failCount > 0) {
+      partialChunks = { chunksFailed: failCount, chunksTotal: chunks.length };
+    }
   } catch (err) {
     console.error("[generate] Gemini error:", err);
     await refundCredit();
@@ -472,14 +503,21 @@ export async function POST(req: NextRequest) {
   await posthog.shutdown();
 
   const safeFilename = sanitizeFilename(deckName);
+  const responseHeaders: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${safeFilename}.apkg"`,
+    "X-Card-Count": String(cards.length),
+    "X-Density": densityKey,
+    "Access-Control-Expose-Headers": "X-Card-Count, X-Density",
+  };
+  if (partialChunks) {
+    responseHeaders["X-Partial"] = "true";
+    responseHeaders["X-Chunks-Failed"] = String(partialChunks.chunksFailed);
+    responseHeaders["X-Chunks-Total"] = String(partialChunks.chunksTotal);
+    responseHeaders["Access-Control-Expose-Headers"] += ", X-Partial, X-Chunks-Failed, X-Chunks-Total";
+  }
   return new Response(new Uint8Array(apkgBuffer), {
     status: 200,
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${safeFilename}.apkg"`,
-      "X-Card-Count": String(cards.length),
-      "X-Density": densityKey,
-      "Access-Control-Expose-Headers": "X-Card-Count, X-Density",
-    },
+    headers: responseHeaders,
   });
 }
