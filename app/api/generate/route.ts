@@ -333,6 +333,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
     documentText = text;
+    console.log("CAPDBG", { identifier, pro, charCap, len: documentText.length });
     if (documentText.length > charCap) {
       await refundCredit();
       const message =
