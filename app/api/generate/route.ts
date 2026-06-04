@@ -249,6 +249,7 @@ export async function POST(req: NextRequest) {
   // the refund-on-failure path further down.
   let charCap = 50_000;
   let creditReserved = false;
+  let pro = false;
   const creditKey = `credit:${identifier ?? "anonymous"}`;
 
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
@@ -260,10 +261,11 @@ export async function POST(req: NextRequest) {
     const bypassToken = process.env.TEST_BYPASS_TOKEN;
     const bypassRateLimit = bypassToken && req.headers.get("x-test-token") === bypassToken;
 
+    pro = await isPro(identifier);
     if (bypassRateLimit) {
       // Bypass skips rate limiting and credit reservation; still honor the Pro cap.
-      if (await isPro(identifier)) charCap = 300_000;
-    } else if (await isPro(identifier)) {
+      if (pro) charCap = 300_000;
+    } else if (pro) {
       // 1. Pro: unlimited generations, 300k cap.
       charCap = 300_000;
     } else {
@@ -450,7 +452,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
 
-  const isProUser = await isPro(identifier);
   const posthog = getPostHogClient();
   posthog.capture({
     distinctId: identifier ?? "anonymous",
@@ -459,7 +460,7 @@ export async function POST(req: NextRequest) {
       card_count: cards.length,
       density: densityKey,
       source: isPaste ? "text" : "pdf",
-      is_pro: isProUser,
+      is_pro: pro,
     },
   });
   await posthog.shutdown();
