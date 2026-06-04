@@ -384,7 +384,7 @@ export async function POST(req: NextRequest) {
             model: "gemini-2.5-flash",
             config: {
               systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-              maxOutputTokens: 8192,
+              maxOutputTokens: 65536,
               temperature: 0.4,
             },
             contents: [
