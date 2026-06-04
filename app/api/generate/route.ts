@@ -369,6 +369,7 @@ export async function POST(req: NextRequest) {
 
   let rawCards: RawCard[];
   let partialChunks: { chunksFailed: number; chunksTotal: number } | null = null;
+  let t0 = 0;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const target = cardTarget(documentText, densityKey);
@@ -413,6 +414,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    t0 = Date.now();
+    console.log("TIMEDBG start");
     const results = await Promise.allSettled(chunks.map((chunk, i) => generateChunk(chunk, i)));
 
     const fulfilled: RawCard[][] = [];
@@ -434,6 +437,7 @@ export async function POST(req: NextRequest) {
 
     rawCards = fulfilled.flat();
     console.log("GENDBG mergedCards", rawCards.length);
+    console.log("TIMEDBG genDone", Date.now() - t0, "ms", "cards", rawCards.length);
 
     if (failCount > 0) {
       partialChunks = { chunksFailed: failCount, chunksTotal: chunks.length };
@@ -447,6 +451,7 @@ export async function POST(req: NextRequest) {
   let cards: Awaited<ReturnType<typeof enrichCards>>;
   try {
     cards = await enrichCards(rawCards);
+    console.log("TIMEDBG enrichDone", Date.now() - t0, "ms");
   } catch (err) {
     console.error("[generate] Enrichment error:", err);
     await refundCredit();
@@ -483,6 +488,7 @@ export async function POST(req: NextRequest) {
   let apkgBuffer: Buffer;
   try {
     apkgBuffer = await buildApkg(deckName, cards);
+    console.log("TIMEDBG buildDone", Date.now() - t0, "ms");
   } catch (err) {
     console.error("[generate] Export error:", err);
     await refundCredit();
