@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
     const target = cardTarget(documentText, densityKey);
     const tracer = trace.getTracer("highyield-cards");
 
-    const chunks = chunkText(documentText, 12000);
+    const chunks = chunkText(documentText, 8000);
     console.log("GENDBG chunks", chunks.length);
 
     async function generateChunk(chunk: string, index: number): Promise<RawCard[]> {
