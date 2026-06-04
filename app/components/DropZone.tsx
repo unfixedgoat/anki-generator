@@ -75,6 +75,7 @@ export default function DropZone({ onGenerated }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [upgradeReason, setUpgradeReason] = useState<"limit" | "characters" | null>(null);
   const [identifier, setIdentifier] = useState("anonymous");
+  const [isPro, setIsPro] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,6 +84,15 @@ export default function DropZone({ onGenerated }: Props) {
       .then((d) => setIdentifier(d.identifier ?? "anonymous"))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((d) => setIsPro(!!d.isPro))
+      .catch(() => {});
+  }, []);
+
+  const clientCharCap = isPro ? 300_000 : 50_000;
   const lastTextRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
   const step2TimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -244,7 +254,7 @@ export default function DropZone({ onGenerated }: Props) {
         return;
       }
 
-      if (text.length > 50_000) {
+      if (text.length > clientCharCap) {
         clearProgressTimers();
         setLoadingStep(null);
         posthog.capture("upgrade_modal_opened", { reason: "characters", source: "pdf" });
@@ -263,13 +273,13 @@ export default function DropZone({ onGenerated }: Props) {
       formData.append("filename", file.name);
       await handleApiResult(formData, file.name, text);
     },
-    [density, cardStyle, customPrompt, handleApiResult, startProgressSteps, clearProgressTimers]
+    [density, cardStyle, customPrompt, clientCharCap, handleApiResult, startProgressSteps, clearProgressTimers]
   );
 
   const processText = useCallback(async () => {
     const text = rawText.trim();
     if (!text) return;
-    if (text.length > 50_000) {
+    if (text.length > clientCharCap) {
       posthog.capture("upgrade_modal_opened", { reason: "characters", source: "text" });
       setUpgradeReason("characters");
       return;
@@ -282,7 +292,7 @@ export default function DropZone({ onGenerated }: Props) {
     formData.append("style", cardStyle);
     formData.append("customPrompt", customPrompt);
     await handleApiResult(formData, "pasted text", text);
-  }, [rawText, density, cardStyle, customPrompt, handleApiResult, startProgressSteps]);
+  }, [rawText, density, cardStyle, customPrompt, clientCharCap, handleApiResult, startProgressSteps]);
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
@@ -609,15 +619,15 @@ export default function DropZone({ onGenerated }: Props) {
                 {rawText.length > 0 ? (
                   <span className={[
                     "text-xs select-none pointer-events-none tabular-nums",
-                    rawText.length >= 50_000
+                    rawText.length >= clientCharCap
                       ? "text-red-500"
-                      : rawText.length > 45_000
+                      : rawText.length > clientCharCap * 0.9
                       ? "text-amber-500"
                       : "text-slate-400",
                   ].join(" ")}>
-                    {rawText.length >= 50_000
+                    {rawText.length >= clientCharCap
                       ? "Limit reached"
-                      : `${(50_000 - rawText.length).toLocaleString()} left`}
+                      : `${(clientCharCap - rawText.length).toLocaleString()} left`}
                   </span>
                 ) : (
                   <span className="hidden md:block text-xs text-slate-400 select-none pointer-events-none">
