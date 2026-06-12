@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { Redis } from "@upstash/redis";
 import { clerkClient } from "@clerk/nextjs/server";
-import { getPostHogClient } from "@/app/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -39,8 +38,6 @@ export async function POST(req: NextRequest) {
     return new Response(null, { status: 200 });
   }
 
-  const posthog = getPostHogClient();
-
   // Process inside try/catch so a throw doesn't leave the evt: dedupe key set.
   // The SET NX above still dedupes a SUCCESSFUL delivery that Stripe retries;
   // but if processing FAILS we must release the key (below) and return non-2xx,
@@ -65,15 +62,6 @@ export async function POST(req: NextRequest) {
           // not permanent Pro. Decremented/enforced in app/api/generate/route.ts.
           await redis.incrby(`credit:${identifier}`, 3);
         }
-        posthog.capture({
-          distinctId: identifier,
-          event: "payment_completed",
-          properties: {
-            mode: session.mode,
-            amount_total: session.amount_total,
-            currency: session.currency,
-          },
-        });
       }
     } else if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription;
@@ -86,13 +74,6 @@ export async function POST(req: NextRequest) {
             publicMetadata: { plan: null },
           });
         }
-        posthog.capture({
-          distinctId: identifier,
-          event: "subscription_cancelled",
-          properties: {
-            cancel_at_period_end: subscription.cancel_at_period_end,
-          },
-        });
       }
     } else if (event.type === "customer.subscription.updated") {
       const subscription = event.data.object as Stripe.Subscription;
@@ -119,14 +100,6 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-        posthog.capture({
-          distinctId: identifier,
-          event: "subscription_updated",
-          properties: {
-            status,
-            cancel_at_period_end: subscription.cancel_at_period_end,
-          },
-        });
       }
     } else if (event.type === "invoice.payment_succeeded") {
       const invoice = event.data.object as Stripe.Invoice;
@@ -160,18 +133,8 @@ export async function POST(req: NextRequest) {
       const identifier = charge.metadata?.identifier;
       if (identifier) {
         await redis.del(`pro:${identifier}`);
-        posthog.capture({
-          distinctId: identifier,
-          event: "charge_refunded",
-          properties: {
-            amount_refunded: charge.amount_refunded,
-            currency: charge.currency,
-          },
-        });
       }
     }
-
-    await posthog.shutdown();
 
     return NextResponse.json({ received: true });
   } catch (err) {

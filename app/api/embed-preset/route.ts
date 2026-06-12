@@ -26,27 +26,38 @@ const ALLOWED_PRESET_KEYS = new Set([
   "warnings", "rationale", "fsrs_enabled", "graduating_interval", "easy_interval",
 ]);
 
+// Step strings must be whitespace-separated positive numbers with an optional
+// s/m/h/d unit ("1m 10m 60m 120m"). Anything else would flow through
+// parseStepsToMinutes as NaN, serialize as null in the dconf JSON, and corrupt
+// the deck Anki imports.
+const STEPS_PATTERN = /^\d+(\.\d+)?[smhd]?(\s+\d+(\.\d+)?[smhd]?)*$/;
+
+function isCount(v: unknown, min: number, max: number): boolean {
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+}
+
 function isValidPreset(p: unknown): p is AnkiPreset {
   if (typeof p !== "object" || p === null) return false;
   const r = p as Record<string, unknown>;
   if (Object.keys(r).some(k => !ALLOWED_PRESET_KEYS.has(k))) return false;
-  // Fields required by both FsrsOnPreset and Sm2Preset
-  if (typeof r.new_cards_per_day !== "number" || !isFinite(r.new_cards_per_day)) return false;
-  if (typeof r.maximum_reviews_per_day !== "number" || !isFinite(r.maximum_reviews_per_day)) return false;
-  if (typeof r.learning_steps !== "string") return false;
+  // Fields required by both FsrsOnPreset and Sm2Preset. Ranges mirror Anki's
+  // own deck-options limits (9999 daily caps, 36500-day = 100-year intervals).
+  if (!isCount(r.new_cards_per_day, 0, 9999)) return false;
+  if (!isCount(r.maximum_reviews_per_day, 0, 9999)) return false;
+  if (typeof r.learning_steps !== "string" || !STEPS_PATTERN.test(r.learning_steps.trim())) return false;
   if (r.insertion_order !== "sequential" && r.insertion_order !== "random") return false;
-  if (typeof r.relearning_steps !== "string") return false;
-  if (typeof r.minimum_interval !== "number" || !isFinite(r.minimum_interval)) return false;
-  if (typeof r.leech_threshold !== "number" || !isFinite(r.leech_threshold)) return false;
+  if (typeof r.relearning_steps !== "string" || !STEPS_PATTERN.test(r.relearning_steps.trim())) return false;
+  if (!isCount(r.minimum_interval, 1, 36500)) return false;
+  if (!isCount(r.leech_threshold, 1, 99)) return false;
   if (r.leech_action !== "tag_only" && r.leech_action !== "suspend") return false;
   if (r.fsrs_enabled !== true && r.fsrs_enabled !== false) return false;
   if (typeof r.desired_retention !== "number" || !isFinite(r.desired_retention) ||
       r.desired_retention < 0 || r.desired_retention > 1) return false;
-  if (typeof r.maximum_interval !== "number" || !isFinite(r.maximum_interval)) return false;
+  if (!isCount(r.maximum_interval, 1, 36500)) return false;
   // SM-2 only: graduating_interval and easy_interval are required when FSRS is off
   if (r.fsrs_enabled === false) {
-    if (typeof r.graduating_interval !== "number" || !isFinite(r.graduating_interval)) return false;
-    if (typeof r.easy_interval !== "number" || !isFinite(r.easy_interval)) return false;
+    if (!isCount(r.graduating_interval, 1, 36500)) return false;
+    if (!isCount(r.easy_interval, 1, 36500)) return false;
   }
   return true;
 }
@@ -240,11 +251,8 @@ export async function POST(req: NextRequest) {
     for (const [deckId, deck] of Object.entries(decks)) {
       if (deckId !== "1" && deck["name"] !== "Default") {
         deck["conf"] = typeof deck["conf"] === "string" ? String(newConfigId) : newConfigId;
-        console.error("[embed-preset] Deck conf field:", JSON.stringify(deck["conf"]), "newConfigId:", newConfigId);
       }
     }
-
-    console.error("[embed-preset] Writing dconf:", JSON.stringify(dconf));
 
     // Write back
     db.run("UPDATE col SET dconf = :dconf, decks = :decks WHERE id = 1", {
@@ -266,7 +274,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.error("[embed-preset] Zip files:", Object.keys(newZip.files));
     const outBuffer = await newZip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
     patchedBytes = outBuffer;
   } catch (err) {

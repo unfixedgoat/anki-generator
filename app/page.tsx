@@ -52,6 +52,12 @@ export default function Home() {
         </button>
       </div>
 
+      {/* Legal footer */}
+      <footer className="flex-shrink-0 w-full px-6 py-2.5 border-t border-slate-200 bg-white flex items-center justify-center gap-4 text-[11px] text-slate-400">
+        <a href="/privacy" className="hover:text-slate-600 underline-offset-2 hover:underline">Privacy</a>
+        <a href="/terms" className="hover:text-slate-600 underline-offset-2 hover:underline">Terms &amp; Refunds</a>
+      </footer>
+
       {/* Feedback button — hidden on mobile, visible sm+ */}
       <motion.div
         className="hidden sm:flex fixed bottom-6 right-6 z-50"

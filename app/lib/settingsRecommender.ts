@@ -68,10 +68,13 @@ export interface RecommenderInput {
   fsrs_enabled?: boolean; // default true
 }
 
+// Mirrors the generate route's density multipliers (0.5 / 1.0 / 1.5),
+// normalized to intensive = 1.0, so remediation card-count estimates match
+// what regenerating at the suggested density actually produces.
 const INTENSITY_RATIOS: Record<IntensityMode, number> = {
   intensive: 1.0,
-  standard: 0.71,
-  light: 0.36,
+  standard: 2 / 3,
+  light: 1 / 3,
 };
 
 const INTENSITY_TO_DENSITY: Record<IntensityMode, string> = {
@@ -223,7 +226,9 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
 
   // ── Step 2 — new_cards_per_day, maximum_reviews_per_day ────────────────────
   const remaining = Math.max(0, totalDeckSize - cards_already_learned);
-  const effectiveDays = days_until_exam ?? 365;
+  // Cram with no exam date still means "soon" — assume a 7-day sprint rather
+  // than pacing the deck over a year, which made the estimates read absurdly.
+  const effectiveDays = days_until_exam ?? (isCramMode ? 7 : 365);
   const buffer = Math.min(14, Math.floor(effectiveDays * 0.2));
   const daysToIntroduce = Math.max(1, effectiveDays - buffer);
 
@@ -329,7 +334,7 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     leech_threshold = 8;
   }
 
-  const leech_action: "tag_only" = "tag_only";
+  const leech_action = "tag_only" as const;
   rationale.push({
     field: "leech_threshold",
     reason: isCramMode
@@ -376,16 +381,21 @@ export function computePreset(input: RecommenderInput): AnkiPreset {
     estimated_finish_date = finish.toISOString().slice(0, 10);
 
     if (!isCramMode && days_until_exam !== null) {
-      const cutoffDays = days_until_exam - 7;
-      if (daysToFinish > cutoffDays) {
-        const covered = estNewPerDay * Math.max(0, cutoffDays);
+      // Compare against the SAME buffer the pacing reserved (daysToIntroduce =
+      // horizon − buffer). A fixed cutoff here (formerly 7 days) contradicted
+      // the plan for 8–35 day horizons, where the buffer is only 1–6 days, and
+      // fired a spurious warning even when the pace finishes exactly on plan.
+      // Now the warning fires only when something throttled the pace below
+      // plan — the daily-minutes budget or the 100/day sustainability cap.
+      if (daysToFinish > daysToIntroduce) {
+        const covered = estNewPerDay * daysToIntroduce;
         const uncovered = Math.max(0, remaining - covered);
         if (uncovered > 0 && !warnings.find(w => w.code === "wont_finish_before_exam")) {
           const rem = computeRemediation(input, daysToIntroduce, totalDeckSize);
           warnings.push({
             severity: "warning",
             code: "wont_finish_before_exam",
-            message: `~${uncovered} cards won't be introduced 7 days before the exam — they'll only appear in late-stage cram sessions.`,
+            message: `~${uncovered} cards won't be introduced before the ${buffer}-day review window ahead of the exam — they'll only appear in late-stage cram sessions.`,
             remediation: rem ?? undefined,
           });
         }

@@ -144,7 +144,9 @@ export async function buildApkg(deckName: string, cards: AnkiCard[]): Promise<Bu
         ":usn": -1,
         ":type": 0,
         ":queue": 0,
-        ":due": 179,
+        // For new cards (queue=0), `due` is the position in the new-card
+        // queue, not a date — sequential positions preserve deck order.
+        ":due": i + 1,
         ":ivl": 0,
         ":factor": 0,
         ":reps": 0,

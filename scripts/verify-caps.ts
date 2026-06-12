@@ -1,14 +1,18 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * verify-caps.ts — Three-part verification script
  *
  * TEST 1: Tiered character caps — seeds pro:/credit: in Redis (the same keys the
- *                                 webhook writes and route.ts reads) and asserts:
- *                                   free   → capped at 50k  (50,001 chars → 400)
- *                                   Pro    → capped at 300k (50,001 passes, 300,001 → 400)
- *                                   credit → capped at 300k (50,001 passes, 300,001 → 400)
- *                                 The Pro/credit 50,001-char probes pass the cap
- *                                 gate and therefore trigger a real generation.
+ *                                 webhook writes and route.ts reads) and sends one
+ *                                 300,001-char probe per tier. Every probe must be
+ *                                 rejected at the cap gate, and the rejection
+ *                                 message names the cap that was enforced:
+ *                                   free   → "50,000 character limit"  (cap 50k)
+ *                                   Pro    → "300,000 character limit" (cap 300k)
+ *                                   credit → "300,000 character limit" (cap 300k)
+ *                                 A 429 on the Pro/credit probe means the request
+ *                                 was treated as FREE tier (identifier mismatch) —
+ *                                 that is a hard FAIL, never a pass. No probe can
+ *                                 pass the cap gate, so T1 burns zero Gemini calls.
  * TEST 2: Normal generation     — expects 200 with non-empty blob
  * TEST 3: Rate limit check      — temporarily patches ratelimit.ts to 1/1m,
  *                                 expects first POST → 200, second → 429
@@ -80,15 +84,16 @@ function fail(label: string, detail: string) {
 }
 
 // Send `textLength` chars to /api/generate under `identifier` (resolved from
-// x-forwarded-for via clientIp, exactly as route.ts does) and report whether the
-// route rejected it specifically at the character cap. The route's cap rejection
-// is the ONLY 400 carrying { error: "characters" }; anything else (200 blob,
-// 422/502/500 from generation, 503 from the global Gemini ceiling) means the
-// payload PASSED the cap gate — which is all this test cares about.
+// x-forwarded-for via clientIp, exactly as route.ts does) and report which cap
+// the route enforced. The cap rejection is the ONLY 400 carrying
+// { error: "characters" }, and its message embeds the active cap verbatim
+// ("Text exceeds 50,000 character limit…" / "Text exceeds 300,000 character
+// limit."), so `capNamed` identifies the tier the route actually applied —
+// a probe can no longer "pass" via an unrelated status like a free-tier 429.
 async function probeCharCap(
   identifier: string,
   textLength: number
-): Promise<{ status: number; charCapRejected: boolean }> {
+): Promise<{ status: number; charCapRejected: boolean; capNamed: string | null }> {
   const fd = new FormData();
   fd.append("text", "a".repeat(textLength));
   fd.append("density", "high-yield");
@@ -101,13 +106,34 @@ async function probeCharCap(
   });
 
   let charCapRejected = false;
+  let capNamed: string | null = null;
   if (res.status === 400) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
     charCapRejected = body?.error === "characters";
+    // Leading anchor matters: the free-tier message also mentions "300,000
+    // characters" in its upgrade hint, so a substring check would be ambiguous.
+    capNamed = body?.message?.match(/^Text exceeds ([\d,]+) character limit/)?.[1] ?? null;
   } else {
-    await res.arrayBuffer().catch(() => {}); // drain (a passing probe returns a blob)
+    await res.arrayBuffer().catch(() => {}); // drain unexpected non-400 bodies
   }
-  return { status: res.status, charCapRejected };
+  return { status: res.status, charCapRejected, capNamed };
+}
+
+// Assert that one tier's 300,001-char probe was cap-rejected under exactly
+// `expectedCap`. Spells out the two interesting failure modes: a 429 (the
+// route treated the request as free tier — the seeded entitlement was never
+// read) and a cap mismatch (wrong tier applied).
+async function assertTierCap(label: string, identifier: string, expectedCap: string): Promise<void> {
+  const probe = await probeCharCap(identifier, 300_001);
+  if (probe.charCapRejected && probe.capNamed === expectedCap) {
+    pass(label, `300,001 chars → character-cap 400 naming ${expectedCap} ✓`);
+  } else if (probe.status === 429) {
+    fail(label, `300,001 chars → 429: request fell through to the FREE rate-limit path — the seeded entitlement key was never matched (identifier mismatch between script and clientIp())`);
+  } else if (probe.charCapRejected) {
+    fail(label, `300,001 chars → character-cap 400, but enforced cap is ${probe.capNamed ?? "unknown"} (expected ${expectedCap})`);
+  } else {
+    fail(label, `300,001 chars → status ${probe.status}, not a character-cap rejection (cap missing or above 300k)`);
+  }
 }
 
 async function test1(): Promise<void> {
@@ -134,40 +160,21 @@ async function test1(): Promise<void> {
   await redis.set(`credit:${creditId}`, 5);
 
   try {
-    // FREE — must be capped at 50k: 50,001 chars → character-cap 400.
-    const free = await probeCharCap(freeId, 50_001);
-    if (free.charCapRejected) {
-      pass("T1-free", "50,001 chars → character-cap 400 (free capped at 50k) ✓");
-    } else {
-      fail("T1-free", `50,001 chars → status ${free.status}, NOT a character-cap rejection (free must not exceed 50k)`);
-    }
+    // Each tier gets one over-cap probe; the rejection message proves which
+    // cap was live. Asserting "300,000" on the Pro/credit probes subsumes the
+    // old 50,001-char "passed the gate" probes (a 50k cap would name 50,000),
+    // without ever triggering a real generation.
+    await assertTierCap("T1-free", freeId, "50,000");
+    await assertTierCap("T1-pro", proId, "300,000");
+    await assertTierCap("T1-credit", creditId, "300,000");
 
-    // PRO — must NOT be capped at 50k, and must be capped at 300k.
-    const proAt50k = await probeCharCap(proId, 50_001);
-    if (!proAt50k.charCapRejected) {
-      pass("T1-pro-50k", `50,001 chars → status ${proAt50k.status}, passed the cap gate (Pro not capped at 50k) ✓`);
+    // The credit probe reserved one credit and must have refunded it at the
+    // cap rejection — verify the refund path didn't silently burn a credit.
+    const creditsLeft = await redis.get(`credit:${creditId}`);
+    if (Number(creditsLeft) === 5) {
+      pass("T1-credit-refund", "cap rejection refunded the reserved credit (still 5) ✓");
     } else {
-      fail("T1-pro-50k", "50,001 chars → character-cap 400 (Pro is wrongly capped at 50k)");
-    }
-    const proAt300k = await probeCharCap(proId, 300_001);
-    if (proAt300k.charCapRejected) {
-      pass("T1-pro-300k", "300,001 chars → character-cap 400 (Pro cap is 300k) ✓");
-    } else {
-      fail("T1-pro-300k", `300,001 chars → status ${proAt300k.status}, NOT rejected (Pro cap exceeds 300k)`);
-    }
-
-    // CREDIT-BACKED — must NOT be capped at 50k, and must be capped at 300k.
-    const creditAt50k = await probeCharCap(creditId, 50_001);
-    if (!creditAt50k.charCapRejected) {
-      pass("T1-credit-50k", `50,001 chars → status ${creditAt50k.status}, passed the cap gate (credit not capped at 50k) ✓`);
-    } else {
-      fail("T1-credit-50k", "50,001 chars → character-cap 400 (credit is wrongly capped at 50k)");
-    }
-    const creditAt300k = await probeCharCap(creditId, 300_001);
-    if (creditAt300k.charCapRejected) {
-      pass("T1-credit-300k", "300,001 chars → character-cap 400 (credit cap is 300k) ✓");
-    } else {
-      fail("T1-credit-300k", `300,001 chars → status ${creditAt300k.status}, NOT rejected (credit cap exceeds 300k)`);
+      fail("T1-credit-refund", `expected 5 credits after refund, found ${creditsLeft}`);
     }
   } finally {
     // Remove seeded keys so a later caller reusing the identifier isn't entitled.

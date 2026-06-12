@@ -7,8 +7,6 @@ import { buildApkg } from "@/app/lib/ankiExport";
 import { ratelimit, isPro, redis } from "@/app/lib/ratelimit";
 import { clientIp } from "@/app/lib/clientIp";
 import { reserveGeminiCall } from "@/app/lib/geminiCeiling";
-import { getPostHogClient } from "@/app/lib/posthog-server";
-import { trace, context } from "@opentelemetry/api";
 
 export const maxDuration = 60;
 
@@ -258,9 +256,14 @@ export async function POST(req: NextRequest) {
   } else {
     // TEST BYPASS: when TEST_BYPASS_TOKEN is set and the request carries a matching
     // X-Test-Token header, skip rate limiting entirely. TEST_BYPASS_TOKEN must NEVER
-    // be added to Vercel production environment variables — dev/CI only.
+    // be added to Vercel production environment variables — dev/CI only. The
+    // VERCEL_ENV guard makes that rule self-enforcing: even a leaked or
+    // mistakenly-configured token is dead on production deployments.
     const bypassToken = process.env.TEST_BYPASS_TOKEN;
-    const bypassRateLimit = bypassToken && req.headers.get("x-test-token") === bypassToken;
+    const bypassRateLimit =
+      process.env.VERCEL_ENV !== "production" &&
+      bypassToken &&
+      req.headers.get("x-test-token") === bypassToken;
 
     pro = await isPro(identifier);
     if (pro) charCap = 300_000;
@@ -334,7 +337,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
     documentText = text;
-    console.log("CAPDBG", { identifier, pro, charCap, len: documentText.length });
     if (documentText.length > charCap) {
       await refundCredit();
       const message =
@@ -369,54 +371,35 @@ export async function POST(req: NextRequest) {
 
   let rawCards: RawCard[];
   let partialChunks: { chunksFailed: number; chunksTotal: number } | null = null;
-  let t0 = 0;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const target = cardTarget(documentText, densityKey);
-    const tracer = trace.getTracer("highyield-cards");
 
     const chunks = chunkText(documentText, 12000);
-    console.log("GENDBG chunks", chunks.length);
 
-    async function generateChunk(chunk: string, index: number): Promise<RawCard[]> {
-      const span = tracer.startSpan("deck_generation", {
-        attributes: { "posthog.distinct_id": identifier ?? "anonymous" },
-      });
-      try {
-        const response = await context.with(
-          trace.setSpan(context.active(), span),
-          () =>
-            ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              config: {
-                systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-                maxOutputTokens: 8000,
-                temperature: 0.4,
+    async function generateChunk(chunk: string): Promise<RawCard[]> {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        config: {
+          systemInstruction: buildSystemInstruction(styleModifier, isPaste),
+          maxOutputTokens: 8000,
+          temperature: 0.4,
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${chunk}`,
               },
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${chunk}`,
-                    },
-                  ],
-                },
-              ],
-            })
-        );
-        console.log(`GENDBG [${index}] finish`, response.candidates?.[0]?.finishReason);
-        const text = response.text ?? "";
-        console.log(`GENDBG [${index}] rawLen`, text.length);
-        return extractJson(text);
-      } finally {
-        span.end();
-      }
+            ],
+          },
+        ],
+      });
+      return extractJson(response.text ?? "");
     }
 
-    t0 = Date.now();
-    console.log("TIMEDBG start");
-    const results = await Promise.allSettled(chunks.map((chunk, i) => generateChunk(chunk, i)));
+    const results = await Promise.allSettled(chunks.map((chunk) => generateChunk(chunk)));
 
     const fulfilled: RawCard[][] = [];
     let failCount = 0;
@@ -436,8 +419,6 @@ export async function POST(req: NextRequest) {
     }
 
     rawCards = fulfilled.flat();
-    console.log("GENDBG mergedCards", rawCards.length);
-    console.log("TIMEDBG genDone", Date.now() - t0, "ms", "cards", rawCards.length);
 
     if (failCount > 0) {
       partialChunks = { chunksFailed: failCount, chunksTotal: chunks.length };
@@ -451,7 +432,6 @@ export async function POST(req: NextRequest) {
   let cards: Awaited<ReturnType<typeof enrichCards>>;
   try {
     cards = await enrichCards(rawCards);
-    console.log("TIMEDBG enrichDone", Date.now() - t0, "ms");
   } catch (err) {
     console.error("[generate] Enrichment error:", err);
     await refundCredit();
@@ -488,25 +468,11 @@ export async function POST(req: NextRequest) {
   let apkgBuffer: Buffer;
   try {
     apkgBuffer = await buildApkg(deckName, cards);
-    console.log("TIMEDBG buildDone", Date.now() - t0, "ms");
   } catch (err) {
     console.error("[generate] Export error:", err);
     await refundCredit();
     return NextResponse.json({ error: "Export failed. Please try again." }, { status: 500 });
   }
-
-  const posthog = getPostHogClient();
-  posthog.capture({
-    distinctId: identifier ?? "anonymous",
-    event: "deck_generated",
-    properties: {
-      card_count: cards.length,
-      density: densityKey,
-      source: isPaste ? "text" : "pdf",
-      is_pro: pro,
-    },
-  });
-  await posthog.shutdown();
 
   const safeFilename = sanitizeFilename(deckName);
   const responseHeaders: Record<string, string> = {

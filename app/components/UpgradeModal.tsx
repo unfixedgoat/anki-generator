@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import posthog from "posthog-js";
 
 type Reason = "limit" | "characters";
 
@@ -74,7 +73,6 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
   );
 
   async function checkout(plan: string) {
-    posthog.capture("checkout_initiated", { plan, reason });
     setLoading(plan);
     try {
       const res = await fetch("/api/stripe/checkout", {
@@ -157,7 +155,6 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
                 <motion.button
                   type="button"
                   onClick={() => {
-                    posthog.capture("upgrade_modal_dismissed", { reason });
                     onClose();
                   }}
                   disabled={loading !== null}
@@ -180,6 +177,13 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
               >
                 {loading === "one_time" ? "Loading…" : "Just need one deck? $2 one-time →"}
               </motion.button>
+
+              <p className="text-[11px] text-slate-400 leading-snug">
+                14-day money-back guarantee. Cancel subscriptions anytime.{" "}
+                <a href="/terms" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">
+                  Terms &amp; refund policy
+                </a>
+              </p>
             </div>
           </motion.div>
         </motion.div>
