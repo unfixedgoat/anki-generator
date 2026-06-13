@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LegalHeader from "@/app/components/LegalHeader";
 
 export const metadata: Metadata = {
   title: "Terms of Service — highyield.cards",
@@ -10,13 +11,10 @@ const LAST_UPDATED = "June 12, 2026";
 
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-[#f7f5f0]">
-      <div className="max-w-2xl mx-auto px-6 py-12">
-        <Link href="/" className="text-sm text-[#7a4f0d] underline">
-          &larr; Back to highyield.cards
-        </Link>
-
-        <h1 className="font-serif text-3xl text-[#1a2820] mt-6 mb-2">Terms of Service</h1>
+    <div className="min-h-screen flex flex-col bg-[#f7f5f0]">
+      <LegalHeader />
+      <main className="flex-1 w-full max-w-xl mx-auto px-6 py-12 sm:py-16">
+        <h1 className="font-serif text-3xl text-[#1a2820] mb-2">Terms of Service</h1>
         <p className="text-sm text-slate-500 mb-8">Last updated: {LAST_UPDATED}</p>
 
         <div className="space-y-8 text-[15px] leading-relaxed text-slate-700">
@@ -153,10 +151,14 @@ export default function TermsPage() {
           </section>
         </div>
 
-        <p className="mt-10 text-sm text-slate-400">
-          See also our <Link href="/privacy" className="underline">Privacy Policy</Link>.
+        <p className="mt-12 text-sm text-slate-500">
+          See also our{" "}
+          <Link href="/privacy" className="text-[#7a4f0d] underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          .
         </p>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

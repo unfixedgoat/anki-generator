@@ -53,9 +53,18 @@ export default function Home() {
       </div>
 
       {/* Legal footer */}
-      <footer className="flex-shrink-0 w-full px-6 py-2.5 border-t border-slate-200 bg-white flex items-center justify-center gap-4 text-[11px] text-slate-400">
-        <a href="/privacy" className="hover:text-slate-600 underline-offset-2 hover:underline">Privacy</a>
-        <a href="/terms" className="hover:text-slate-600 underline-offset-2 hover:underline">Terms &amp; Refunds</a>
+      <footer className="flex-shrink-0 w-full border-t border-slate-200 bg-white">
+        <div className="px-6 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span>© 2026 highyield.cards</span>
+          <span aria-hidden="true" className="text-slate-300">·</span>
+          <a href="/privacy" className="py-1 text-[#7a4f0d] underline-offset-2 hover:underline transition-colors">
+            Privacy
+          </a>
+          <span aria-hidden="true" className="text-slate-300">·</span>
+          <a href="/terms" className="py-1 text-[#7a4f0d] underline-offset-2 hover:underline transition-colors">
+            Terms &amp; Refunds
+          </a>
+        </div>
       </footer>
 
       {/* Feedback button — hidden on mobile, visible sm+ */}
