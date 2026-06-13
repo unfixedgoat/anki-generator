@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
 import AccountChip from "@/app/components/AccountChip";
-import { APP_VERSION } from "@/app/version";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
@@ -17,7 +16,6 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
-          <span className="text-[10px] text-slate-300 font-mono ml-1">{APP_VERSION}</span>
         </div>
         <p className="hidden sm:block text-center text-sm text-slate-400 font-serif italic pointer-events-none">
           Drop your syllabus. Get an Anki deck built around your exam date.
@@ -53,7 +51,7 @@ export default function Home() {
       </div>
 
       {/* Legal footer */}
-      <footer className="flex-shrink-0 w-full border-t border-slate-200 bg-white">
+      <footer className="relative flex-shrink-0 w-full border-t border-slate-200 bg-white">
         <div className="px-6 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-500">
           <span>© 2026 highyield.cards</span>
           <span aria-hidden="true" className="text-slate-300">·</span>
@@ -65,25 +63,25 @@ export default function Home() {
             Terms &amp; Refunds
           </a>
         </div>
-      </footer>
 
-      {/* Feedback button — hidden on mobile, visible sm+ */}
-      <motion.div
-        className="hidden sm:flex fixed bottom-6 right-6 z-50"
-        initial={{ opacity: 0, scale: 0.8, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8, delay: 0.5 }}
-      >
-        <motion.button
-          onClick={() => window.open('https://tally.so/r/b5YPre', '_blank')}
-          className="bg-[#c97f1a] text-white text-xs font-medium px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+        {/* Feedback button — hidden on mobile, visible sm+, centered in the footer */}
+        <motion.div
+          className="hidden sm:flex items-center absolute right-6 inset-y-0 z-50"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.8, delay: 0.5 }}
         >
-          Feedback
-        </motion.button>
-      </motion.div>
+          <motion.button
+            onClick={() => window.open('https://tally.so/r/b5YPre', '_blank')}
+            className="bg-[#c97f1a] text-white text-xs font-medium px-4 py-1.5 rounded-full shadow-md hover:bg-[#b8720f] transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+          >
+            Feedback
+          </motion.button>
+        </motion.div>
+      </footer>
     </div>
   );
 }
