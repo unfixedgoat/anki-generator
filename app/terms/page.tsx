@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import LegalHeader from "@/app/components/LegalHeader";
+import LegalFooter from "@/app/components/LegalFooter";
+import LegalLink from "@/app/components/LegalLink";
 
 export const metadata: Metadata = {
   title: "Terms of Service — highyield.cards",
@@ -14,8 +15,8 @@ export default function TermsPage() {
     <div className="min-h-screen flex flex-col bg-[#f7f5f0]">
       <LegalHeader />
       <main className="flex-1 w-full max-w-xl mx-auto px-6 py-12 sm:py-16">
-        <h1 className="font-serif text-3xl text-[#1a2820] mb-2">Terms of Service</h1>
-        <p className="text-sm text-slate-500 mb-8">Last updated: {LAST_UPDATED}</p>
+        <h1 className="font-serif text-3xl tracking-tight text-[#1a2820] mb-2">Terms of Service</h1>
+        <p className="text-sm text-slate-600 mb-8">Last updated: {LAST_UPDATED}</p>
 
         <div className="space-y-8 text-[15px] leading-relaxed text-slate-700">
           <section>
@@ -35,7 +36,7 @@ export default function TermsPage() {
               you&rsquo;re licensed to use, or content in the public domain. You grant us a limited
               license to process your documents solely to generate your decks, including
               transmitting their text to Google&rsquo;s Gemini API as described in our{" "}
-              <Link href="/privacy" className="underline text-[#7a4f0d]">Privacy Policy</Link>. We
+              <LegalLink href="/privacy">Privacy Policy</LegalLink>. We
               do not store your documents after your request completes.
             </p>
           </section>
@@ -80,7 +81,7 @@ export default function TermsPage() {
               <li>
                 <strong>One-time purchases:</strong> if you&rsquo;re unhappy for any reason, contact
                 us within 14 days of purchase via the{" "}
-                <a href="https://tally.so/r/b5YPre" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">contact form</a>{" "}
+                <LegalLink href="https://tally.so/r/b5YPre">contact form</LegalLink>{" "}
                 and we&rsquo;ll refund you in full. Refunds are issued to your original payment
                 method; remaining credits are removed when the refund is processed.
               </li>
@@ -146,19 +147,12 @@ export default function TermsPage() {
             <h2 className="font-serif text-xl text-[#1a2820] mb-2">10. Contact</h2>
             <p>
               Questions, refund requests, or anything else: reach us through the{" "}
-              <a href="https://tally.so/r/b5YPre" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">contact form</a>.
+              <LegalLink href="https://tally.so/r/b5YPre">contact form</LegalLink>.
             </p>
           </section>
         </div>
-
-        <p className="mt-12 text-sm text-slate-500">
-          See also our{" "}
-          <Link href="/privacy" className="text-[#7a4f0d] underline underline-offset-2">
-            Privacy Policy
-          </Link>
-          .
-        </p>
       </main>
+      <LegalFooter current="terms" />
     </div>
   );
 }

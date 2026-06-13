@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import LegalHeader from "@/app/components/LegalHeader";
+import LegalFooter from "@/app/components/LegalFooter";
+import LegalLink from "@/app/components/LegalLink";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — highyield.cards",
@@ -14,8 +15,8 @@ export default function PrivacyPage() {
     <div className="min-h-screen flex flex-col bg-[#f7f5f0]">
       <LegalHeader />
       <main className="flex-1 w-full max-w-xl mx-auto px-6 py-12 sm:py-16">
-        <h1 className="font-serif text-3xl text-[#1a2820] mb-2">Privacy Policy</h1>
-        <p className="text-sm text-slate-500 mb-8">Last updated: {LAST_UPDATED}</p>
+        <h1 className="font-serif text-3xl tracking-tight text-[#1a2820] mb-2">Privacy Policy</h1>
+        <p className="text-sm text-slate-600 mb-8">Last updated: {LAST_UPDATED}</p>
 
         <div className="space-y-8 text-[15px] leading-relaxed text-slate-700">
           <section>
@@ -23,7 +24,7 @@ export default function PrivacyPage() {
             <p>
               highyield.cards (&ldquo;we,&rdquo; &ldquo;us&rdquo;) is a tool that turns documents you
               provide into Anki flashcard decks. This policy explains what data we handle when you
-              use the service at <span className="font-mono text-sm">https://highyield.cards</span>,
+              use the service at <span className="font-mono text-[0.9em]">https://highyield.cards</span>,
               and the choices you have.
             </p>
           </section>
@@ -33,21 +34,21 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-2">
               <li>
                 <strong>Account information.</strong> If you sign in, our authentication provider{" "}
-                <a href="https://clerk.com/legal/privacy" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">Clerk</a>{" "}
+                <LegalLink href="https://clerk.com/legal/privacy">Clerk</LegalLink>{" "}
                 collects your email address and, if you provide it, your name. We use this to
                 identify your account and apply your plan limits.
               </li>
               <li>
                 <strong>Documents you upload or paste.</strong> When you generate a deck, the text
                 of your document is sent to our server and then transmitted to{" "}
-                <a href="https://ai.google.dev/gemini-api/terms" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">Google&rsquo;s Gemini API</a>{" "}
+                <LegalLink href="https://ai.google.dev/gemini-api/terms">Google&rsquo;s Gemini API</LegalLink>{" "}
                 to produce the flashcards. We process your document in memory to build your deck
                 and do not store its contents on our servers after your request completes.
                 Google&rsquo;s handling of API inputs is governed by its Gemini API terms.
               </li>
               <li>
                 <strong>Payment information.</strong> Purchases are processed by{" "}
-                <a href="https://stripe.com/privacy" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">Stripe</a>.
+                <LegalLink href="https://stripe.com/privacy">Stripe</LegalLink>.
                 We never see or store your card number. We keep a record of your plan or purchase
                 credits, tied to your account ID (or, for guest purchases, your IP address).
               </li>
@@ -116,7 +117,7 @@ export default function PrivacyPage() {
               Depending on where you live (including under GDPR and CCPA), you may have the right
               to access, correct, delete, or export your personal data, and to object to or
               restrict certain processing. To exercise any of these rights, contact us via the{" "}
-              <a href="https://tally.so/r/b5YPre" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">contact form</a>{" "}
+              <LegalLink href="https://tally.so/r/b5YPre">contact form</LegalLink>{" "}
               and we will respond within 30 days.
             </p>
           </section>
@@ -141,19 +142,12 @@ export default function PrivacyPage() {
             <h2 className="font-serif text-xl text-[#1a2820] mb-2">Contact</h2>
             <p>
               Questions about this policy? Reach us through the{" "}
-              <a href="https://tally.so/r/b5YPre" className="underline text-[#7a4f0d]" target="_blank" rel="noopener noreferrer">contact form</a>.
+              <LegalLink href="https://tally.so/r/b5YPre">contact form</LegalLink>.
             </p>
           </section>
         </div>
-
-        <p className="mt-12 text-sm text-slate-500">
-          See also our{" "}
-          <Link href="/terms" className="text-[#7a4f0d] underline underline-offset-2">
-            Terms of Service
-          </Link>
-          .
-        </p>
       </main>
+      <LegalFooter current="privacy" />
     </div>
   );
 }
