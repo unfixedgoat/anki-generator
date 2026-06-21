@@ -188,6 +188,81 @@ async function main() {
     fail("finalize-mermaid", `enriched card has no mermaid.ink/img/ URL — visual_url="${visualUrl}" (mermaid.ink unreachable?)`);
   }
 
+  // ── style/density matrix ──
+  // Each combo uses its OWN fresh IP: the burst test above exhausted RUN_IP's
+  // 50/60s window, and a fresh IP is also a fresh free-quota bucket so
+  // deck/start returns 200. Covers the styles most likely to break prompt
+  // construction, including the historically 502-prone solve/formula combos.
+  console.log("\n─── matrix: style × density (fresh IP + deck/start per combo) ───");
+
+  // A science paragraph rich enough for every style to emit cards. solve/formula
+  // invent their own numerics per their modifiers, so generic content is fine.
+  const MATRIX_TEXT =
+    "Ohm's law relates voltage, current, and resistance in a circuit: V equals I times R. " +
+    "Kinetic energy of a moving mass is one half m v squared. The ideal gas law states PV = nRT. " +
+    "Cardiac output is heart rate multiplied by stroke volume. Force equals mass times acceleration. " +
+    "The resting membrane potential of a neuron is about -70 mV, maintained by the sodium-potassium pump.";
+
+  const combos: Array<{ style: string; density: string; check?: "cloze" }> = [
+    { style: "standard", density: "high-yield" },
+    { style: "cloze", density: "high-yield", check: "cloze" },
+    { style: "mcq", density: "comprehensive" },
+    { style: "solve", density: "granular" },
+    { style: "formula", density: "granular" },
+  ];
+
+  for (const { style, density, check } of combos) {
+    const label = `${style}/${density}`;
+    const ip = `chunk-matrix-${style}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const headers = { "content-type": "application/json", "x-forwarded-for": ip };
+
+    // Fresh deck/start for this combo.
+    const startRes = await fetch(`${BASE_URL}/api/deck/start`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ totalChars: MATRIX_TEXT.length, chunks: 1 }),
+    });
+    const startBody = (await startRes.json().catch(() => null)) as { token?: string } | null;
+    if (startRes.status !== 200 || typeof startBody?.token !== "string") {
+      fail(label, `deck/start failed: ${startRes.status} ${JSON.stringify(startBody)}`);
+      continue;
+    }
+
+    // Single chunk call with this style/density.
+    const chunkRes = await fetch(`${BASE_URL}/api/generate/chunk`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ token: startBody.token, chunk: MATRIX_TEXT, style, density }),
+    });
+    const chunkBody = (await chunkRes.json().catch(() => null)) as
+      | { cards?: Array<{ front?: string; back?: string }>; error?: string }
+      | null;
+
+    if (chunkRes.status !== 200 || !Array.isArray(chunkBody?.cards) || chunkBody.cards.length < 1) {
+      fail(label, `chunk → ${chunkRes.status}, expected 200 with ≥1 card (body=${JSON.stringify(chunkBody)?.slice(0, 160)})`);
+      continue;
+    }
+
+    if (check === "cloze") {
+      // The app's cloze style emits "___" blanks on the front (it does NOT emit
+      // Anki {{c1::}} syntax on the back). Accept either marker, matching the
+      // existing test-deck-quality cloze predicate. See report note.
+      const clozeOk = chunkBody.cards.some(
+        (c) =>
+          /\{\{c\d+::/.test(`${c.front ?? ""}${c.back ?? ""}`) ||
+          (c.front ?? "").includes("___") ||
+          (c.back ?? "").includes("___")
+      );
+      if (clozeOk) {
+        pass(label, `200, ${chunkBody.cards.length} card(s), cloze marker present (___ or {{c1::) ✓`);
+      } else {
+        fail(label, `200 with cards but no cloze marker (___ or {{c1::) in any card`);
+      }
+    } else {
+      pass(label, `200, ${chunkBody.cards.length} card(s) ✓`);
+    }
+  }
+
   console.log(`\n─── Done: ${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`} ───\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

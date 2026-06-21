@@ -17,12 +17,66 @@
 import { GoogleGenAI } from "@google/genai";
 import { RawCard } from "@/app/lib/visualEnricher";
 
-// Verbatim from /api/generate route.ts — standard style + high-yield density are
-// the defaults this standalone path renders. Keep byte-identical to the live path.
-const STANDARD_STYLE_MODIFIER =
-  "Generate standard flashcards: focused question on the front, complete sentence answer on the back.";
-const HIGH_YIELD_DENSITY_MODIFIER =
-  "Extract ONLY the most critical, highly-tested concepts. Prioritize ruthlessly — skip minor details, but do not artificially limit card count. Fill the full target.";
+// Verbatim from /api/generate route.ts — all 8 styles and 3 densities. Keep
+// byte-identical to the live path (see migration note above).
+const STYLE_MODIFIERS: Record<string, string> = {
+  "standard":
+    "Generate standard flashcards: focused question on the front, complete sentence answer on the back.",
+  "cloze":
+    `Generate cloze (fill-in-the-blank) cards. The front MUST be a complete sentence with the key term replaced by ___ (three underscores). The back reveals the missing term and briefly explains it. Never write the term on the front.
+Example:
+  front: "The ___ is the powerhouse of the cell."
+  back: "mitochondrion — an organelle that produces ATP via oxidative phosphorylation."`,
+  "concise":
+    "Generate cards where the back is a single word or very short phrase — never more than 5 words. The front must be specific enough that one short answer suffices.",
+  "essay":
+    "Generate cards requiring deep, multi-sentence answers. The front must ask 'explain', 'describe the mechanism of', or 'compare and contrast'. The back must be thorough and multi-sentence.",
+  "mcq":
+    `Generate multiple-choice cards. Every single card MUST follow this exact format — no exceptions.
+The "front" field: question text, then a newline character, then exactly four options each on its own line labeled A), B), C), D).
+The "back" field: the correct letter, the answer text, and a one-sentence explanation.
+All four options must be plausible; only one is correct.
+
+Required JSON format example:
+  "front": "Which hormone is produced in excess in Congenital Adrenal Hyperplasia?\\nA) Estrogen\\nB) Cortisol\\nC) Androgens\\nD) Insulin",
+  "back": "C) Androgens — CAH causes a cortisol synthesis defect that shunts precursors into androgen production."
+
+You MUST produce this four-option format for every card. Do NOT generate plain Q&A cards.`,
+  "solve":
+    `Generate worked practice problem cards. EVERY card in the output must be a quantitative word problem with a step-by-step numerical solution. Zero exceptions. If you are about to write a definition, a concept explanation, or any card without numbers — stop and rewrite it as a calculation problem instead.
+
+Required JSON format — every card must match this pattern exactly:
+  "front": "A 70 kg patient is given 0.1 mg/kg of epinephrine IV. What is the total dose in mg?"
+  "back": "Total dose = 0.1 mg/kg × 70 kg = 7 mg"
+
+  "front": "A reaction has ΔH = −50 kJ/mol and ΔS = −150 J/mol·K. What is the crossover temperature in Kelvin?"
+  "back": "Tcrossover = ΔH / ΔS\\nConvert ΔH: −50 kJ/mol = −50,000 J/mol\\nTcrossover = −50,000 / −150 = 333 K"
+
+  "front": "A neuron has Vm = −70 mV and E_K = −90 mV. What is the driving force on K⁺?"
+  "back": "Driving force = Vm − E_K = −70 − (−90) = +20 mV (outward)"
+
+Mandatory rules:
+- Invent realistic numerical values for EVERY card — the source document does not need to contain numbers
+- Front: word problem with invented numbers, asks to solve for exactly one unknown
+- Back: labeled equation → substitution → answer with units, each step on its own line (use \\n)
+- If a concept seems non-quantitative, find the formula that governs it and build a calculation around that formula
+- Do NOT generate any standard Q&A, definition, or explanation cards — the entire deck must be calculation problems`,
+  "formula":
+    `Generate equation recall cards. The front asks "What is the equation for [concept]?". The back states the equation in plain-text notation, then defines each variable on the next line.
+Example:
+  front: "What is the equation for cardiac output?"
+  back: "CO = HR × SV\\nCO = cardiac output (L/min), HR = heart rate (beats/min), SV = stroke volume (mL/beat)"
+Even in granular density mode, every card must be an equation recall card. If you have exhausted all formula-shaped content in the source, stop generating rather than falling back to fact recall, vocabulary, or definition cards — a smaller deck of valid equation cards is correct; an inflated deck of non-formula cards is not.`,
+};
+
+const DENSITY_MODIFIERS: Record<string, string> = {
+  "high-yield":
+    "Extract ONLY the most critical, highly-tested concepts. Prioritize ruthlessly — skip minor details, but do not artificially limit card count. Fill the full target.",
+  "comprehensive":
+    "Extract core concepts plus secondary supporting details, specific names, mechanisms, and clinical correlations.",
+  "granular":
+    "Extract every testable fact, statistic, mechanism, and edge-case in the text. Leave nothing out.",
+};
 
 function buildSystemInstruction(styleModifier: string, isPaste: boolean): string {
   const citationInstruction = isPaste
@@ -174,18 +228,43 @@ function extractJson(raw: string): RawCard[] {
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
-// Single-chunk generation. The prompt content below is byte-identical to the
-// inlined generateChunk helper in /api/generate (standard style, high-yield
-// density defaults). maxOutputTokens is the one deliberate change: 65536.
-export async function generateChunk(chunk: string): Promise<RawCard[]> {
+// Single-chunk generation. Style/density injection below is byte-identical to
+// the live /api/generate path. maxOutputTokens is the one deliberate change:
+// 65536. Params default to standard/high-yield only when undefined is passed,
+// so any older caller that omits them keeps working.
+//
+// NOTE: the live path's "custom" style draws its prompt from a separate
+// `customPrompt` form field. This signature carries only (chunk, style,
+// density), so style === "custom" falls through to STYLE_MODIFIERS["standard"]
+// — exactly what the old path does when the custom prompt is empty. If custom
+// prompts ever need to flow through this path, thread the text in as a 4th arg.
+export async function generateChunk(
+  chunk: string,
+  style: string = "standard",
+  density: string = "high-yield"
+): Promise<RawCard[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   const ai = new GoogleGenAI({ apiKey });
 
-  const styleModifier = STANDARD_STYLE_MODIFIER;
-  const densityModifier = HIGH_YIELD_DENSITY_MODIFIER;
+  // Style injection — verbatim from /api/generate. customPrompt is unavailable
+  // via this signature (see note above), so the custom branch is never taken.
+  const rawStyle = style ?? "standard";
+  const customPrompt = "";
+  let styleModifier: string;
+  if (rawStyle === "custom" && customPrompt) {
+    styleModifier = `CUSTOM CARD FORMAT — follow these instructions exactly, they override all defaults:\n${customPrompt}`;
+  } else {
+    styleModifier = STYLE_MODIFIERS[rawStyle] ?? STYLE_MODIFIERS["standard"];
+  }
+
+  // Density injection + cardTarget — verbatim from /api/generate.
+  const rawDensity = density ?? "high-yield";
+  const densityKey = rawDensity in DENSITY_MODIFIERS ? rawDensity : "high-yield";
+  const densityModifier = DENSITY_MODIFIERS[densityKey];
+
   const isPaste = false;
-  const target = cardTarget(chunk, "high-yield");
+  const target = cardTarget(chunk, densityKey);
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
