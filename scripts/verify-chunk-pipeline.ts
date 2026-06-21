@@ -263,6 +263,96 @@ async function main() {
     }
   }
 
+  // ── custom probe (positive): the custom prompt must actually shape output ──
+  // A fresh deck/start mints a token; retries reuse it (chunk calls don't
+  // consume the token and stay well under the burst cap). The distinctive
+  // [HYC] token has no markdown chars, so it survives stripMarkdown intact.
+  console.log("\n─── custom: prompt text threads through and shapes output ───");
+  {
+    const ip = `chunk-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const headers = { "content-type": "application/json", "x-forwarded-for": ip };
+    const startRes = await fetch(`${BASE_URL}/api/deck/start`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ totalChars: MATRIX_TEXT.length, chunks: 1 }),
+    });
+    const startBody = (await startRes.json().catch(() => null)) as { token?: string } | null;
+    if (startRes.status !== 200 || typeof startBody?.token !== "string") {
+      fail("custom", `deck/start failed: ${startRes.status} ${JSON.stringify(startBody)}`);
+    } else {
+      const customToken = startBody.token;
+      const customPrompt =
+        "Every card front MUST begin with the literal token [HYC]. " +
+        "Output [HYC] exactly, as the very first characters of every front field, before any other text.";
+      let ok = false;
+      let lastDetail = "";
+      // 1 attempt + up to 2 retries: tolerates occasional model inconsistency
+      // while still requiring the custom instruction to demonstrably shape output.
+      for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+        const res = await fetch(`${BASE_URL}/api/generate/chunk`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            token: customToken,
+            chunk: MATRIX_TEXT,
+            style: "custom",
+            density: "high-yield",
+            customPrompt,
+          }),
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { cards?: Array<{ front?: string }>; error?: string }
+          | null;
+        if (res.status === 200 && Array.isArray(body?.cards) && body.cards.length >= 1) {
+          const hit = body.cards.some((c) => (c.front ?? "").trimStart().startsWith("[HYC]"));
+          if (hit) {
+            ok = true;
+            pass("custom", `attempt ${attempt}: 200, ${body.cards.length} card(s), ≥1 front begins with [HYC] ✓`);
+          } else {
+            lastDetail = `attempt ${attempt}: 200 with ${body.cards.length} cards but no front begins with [HYC] (sample: "${(body.cards[0]?.front ?? "").slice(0, 70)}")`;
+          }
+        } else {
+          lastDetail = `attempt ${attempt}: status ${res.status} (body=${JSON.stringify(body)?.slice(0, 140)})`;
+        }
+      }
+      if (!ok) fail("custom", lastDetail || "custom prompt did not shape output after 3 attempts");
+    }
+  }
+
+  // ── custom negative control: empty customPrompt falls back to standard ──
+  console.log("\n─── custom-empty: customPrompt \"\" falls back cleanly, still 200 + cards ───");
+  {
+    const ip = `chunk-custom-empty-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const headers = { "content-type": "application/json", "x-forwarded-for": ip };
+    const startRes = await fetch(`${BASE_URL}/api/deck/start`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ totalChars: MATRIX_TEXT.length, chunks: 1 }),
+    });
+    const startBody = (await startRes.json().catch(() => null)) as { token?: string } | null;
+    if (startRes.status !== 200 || typeof startBody?.token !== "string") {
+      fail("custom-empty", `deck/start failed: ${startRes.status} ${JSON.stringify(startBody)}`);
+    } else {
+      const res = await fetch(`${BASE_URL}/api/generate/chunk`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          token: startBody.token,
+          chunk: MATRIX_TEXT,
+          style: "custom",
+          density: "high-yield",
+          customPrompt: "",
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as { cards?: unknown[]; error?: string } | null;
+      if (res.status === 200 && Array.isArray(body?.cards) && body.cards.length >= 1) {
+        pass("custom-empty", `200, ${body.cards.length} card(s) — empty custom fell back to standard ✓`);
+      } else {
+        fail("custom-empty", `expected 200 with ≥1 card, got ${res.status} (body=${JSON.stringify(body)?.slice(0, 140)})`);
+      }
+    }
+  }
+
   console.log(`\n─── Done: ${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`} ───\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

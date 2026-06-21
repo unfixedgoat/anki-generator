@@ -19,12 +19,14 @@ export async function POST(req: NextRequest) {
   let chunk: string;
   let style = "standard";
   let density = "high-yield";
+  let customPrompt = "";
   try {
     const body = (await req.json()) as {
       token?: unknown;
       chunk?: unknown;
       style?: unknown;
       density?: unknown;
+      customPrompt?: unknown;
     };
     if (typeof body.token !== "string" || typeof body.chunk !== "string") {
       return NextResponse.json({ error: "invalid" }, { status: 400 });
@@ -33,6 +35,7 @@ export async function POST(req: NextRequest) {
     chunk = body.chunk;
     if (typeof body.style === "string") style = body.style;
     if (typeof body.density === "string") density = body.density;
+    if (typeof body.customPrompt === "string") customPrompt = body.customPrompt;
   } catch {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
@@ -59,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   let cards;
   try {
-    cards = await generateChunk(chunk, style, density);
+    cards = await generateChunk(chunk, style, density, customPrompt);
   } catch (err) {
     console.error("[generate/chunk] Gemini error:", err);
     return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 502 });

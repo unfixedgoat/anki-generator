@@ -228,32 +228,33 @@ function extractJson(raw: string): RawCard[] {
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
-// Single-chunk generation. Style/density injection below is byte-identical to
-// the live /api/generate path. maxOutputTokens is the one deliberate change:
-// 65536. Params default to standard/high-yield only when undefined is passed,
-// so any older caller that omits them keeps working.
+// Single-chunk generation. Style/density/custom injection below is
+// byte-identical to the live /api/generate path. maxOutputTokens is the one
+// deliberate change: 65536. style/density default to standard/high-yield and
+// customPrompt to "" only when undefined is passed, so any older caller that
+// omits them keeps working.
 //
-// NOTE: the live path's "custom" style draws its prompt from a separate
-// `customPrompt` form field. This signature carries only (chunk, style,
-// density), so style === "custom" falls through to STYLE_MODIFIERS["standard"]
-// — exactly what the old path does when the custom prompt is empty. If custom
-// prompts ever need to flow through this path, thread the text in as a 4th arg.
+// "custom" style: the caller threads the user-entered prompt through the
+// customPrompt arg, mirroring the live path's `customPrompt` form field. An
+// empty/whitespace customPrompt falls through to STYLE_MODIFIERS["standard"] —
+// exactly what the old path does when the custom prompt is empty.
 export async function generateChunk(
   chunk: string,
   style: string = "standard",
-  density: string = "high-yield"
+  density: string = "high-yield",
+  customPrompt: string = ""
 ): Promise<RawCard[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   const ai = new GoogleGenAI({ apiKey });
 
-  // Style injection — verbatim from /api/generate. customPrompt is unavailable
-  // via this signature (see note above), so the custom branch is never taken.
+  // Style + custom-prompt injection — verbatim from /api/generate. The trim and
+  // the truthiness gate match the old path: custom-with-no-text == standard.
   const rawStyle = style ?? "standard";
-  const customPrompt = "";
+  const customPromptTrimmed = (customPrompt ?? "").trim();
   let styleModifier: string;
-  if (rawStyle === "custom" && customPrompt) {
-    styleModifier = `CUSTOM CARD FORMAT — follow these instructions exactly, they override all defaults:\n${customPrompt}`;
+  if (rawStyle === "custom" && customPromptTrimmed) {
+    styleModifier = `CUSTOM CARD FORMAT — follow these instructions exactly, they override all defaults:\n${customPromptTrimmed}`;
   } else {
     styleModifier = STYLE_MODIFIERS[rawStyle] ?? STYLE_MODIFIERS["standard"];
   }
