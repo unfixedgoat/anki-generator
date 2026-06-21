@@ -17,7 +17,9 @@
     "test:adversarial": "npx tsx scripts/test-adversarial.ts",
     "test:wikimedia": "npx tsx scripts/test-wikimedia.ts",
     "test:repairjson": "npx tsx scripts/test-repairjson.ts",
-    "verify:caps": "npx ts-node --project scripts/tsconfig.json scripts/verify-caps.ts"
+    "verify:caps": "npx ts-node --project scripts/tsconfig.json scripts/verify-caps.ts",
+    "verify:deck-start": "npx tsx scripts/verify-deck-start.ts",
+    "verify:chunk-pipeline": "npx tsx scripts/verify-chunk-pipeline.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.7",
