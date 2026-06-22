@@ -28,6 +28,17 @@ import * as path from "path";
 import JSZip from "jszip";
 import { enrichCards, RawCard } from "../app/lib/visualEnricher";
 
+// sql.js reads cards back out of the .apkg's collection.anki2 SQLite DB — the
+// same reader test:citations used to prove the per-card footer. Mirrors that
+// script's require() form (sql.js ships no clean ESM default for this usage).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const initSqlJs = require("sql.js") as () => Promise<{
+  Database: new (data: Uint8Array) => {
+    exec(sql: string): Array<{ values: unknown[][] }>;
+    close(): void;
+  };
+}>;
+
 const BASE_URL = "http://localhost:3000";
 
 function loadEnvLocal(): void {
@@ -91,6 +102,26 @@ async function postChunk(token: string, chunk: string): Promise<{ status: number
   return { status: res.status, cards: body?.cards };
 }
 
+// Unzip the finalize .apkg and read every note's back field out of the
+// collection.anki2 SQLite DB. Anki packs fields into a single column separated
+// by ASCII 0x1f (unit separator); the back is field [1]. This is the live-path
+// equivalent of test-deck-quality's extractCards — the artifact is the proof.
+async function readCardBacks(apkg: Buffer): Promise<string[]> {
+  const zip = await new JSZip().loadAsync(apkg);
+  const dbFile = zip.file("collection.anki2");
+  if (!dbFile) throw new Error("collection.anki2 not found in .apkg");
+  const dbData = await dbFile.async("uint8array");
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(dbData);
+  try {
+    const out = db.exec("SELECT flds FROM notes");
+    const rows = out.length ? out[0].values : [];
+    return rows.map((r) => (r[0] as string).split("\x1f")[1] ?? "");
+  } finally {
+    db.close();
+  }
+}
+
 async function main() {
   if (!(await checkServer())) {
     console.error("\nDev server not reachable on localhost:3000. Start it with: npm run dev\nExiting.");
@@ -147,6 +178,26 @@ async function main() {
     visual_type: "mermaid",
     visual_data: "graph TD; A-->B",
   };
+  // Two plain cards alongside the mermaid card exercise BOTH footer branches:
+  // citedCard has a real citation (rendered as a span); pasteCard's "Pasted
+  // text" citation is suppressed to a flag-link-only footer. All three must
+  // still carry the tally.so flag link.
+  const citedCard: RawCard = {
+    front: "Which organ pumps blood through the body?",
+    back: "The heart.",
+    card_type: "basic",
+    citation: "Section 3.2",
+    visual_type: "none",
+    visual_data: "",
+  };
+  const pasteCard: RawCard = {
+    front: "Define osmosis in one sentence.",
+    back: "Net movement of water across a semipermeable membrane.",
+    card_type: "definition",
+    citation: "Pasted text",
+    visual_type: "none",
+    visual_data: "",
+  };
 
   const res = await fetch(`${BASE_URL}/api/finalize`, {
     method: "POST",
@@ -154,7 +205,7 @@ async function main() {
     body: JSON.stringify({
       token,
       deckName: "verify-chunk-pipeline",
-      cards: [mermaidCard],
+      cards: [mermaidCard, citedCard, pasteCard],
       style: "standard",
       density: "high-yield",
     }),
@@ -174,6 +225,40 @@ async function main() {
       }
     } catch (e) {
       fail("finalize-zip", `response is not a valid zip: ${e}`);
+    }
+
+    // Citation-footer parity on the LIVE path. Read the cards back out of the
+    // .apkg the pipeline just built and assert finalize stamped the per-card
+    // footer. This ports test:citations' invariant (every back carries the
+    // tally.so flag link) onto deck/start→chunk→finalize, and additionally
+    // covers both footer branches. The .apkg is the proof, not the HTTP shape.
+    try {
+      const backs = await readCardBacks(buf);
+      const n = backs.length;
+      const withFlag = backs.filter(
+        (b) => b.includes("tally.so/r/NpbkBW") && b.includes("⚑ flag")
+      ).length;
+      if (n >= 1 && withFlag === n) {
+        pass("finalize-footer", `${withFlag}/${n} card backs carry the tally.so + ⚑ flag footer ✓`);
+      } else {
+        fail("finalize-footer", `expected all ${n} backs to carry the flag-link footer, only ${withFlag} did`);
+      }
+
+      const citedBack = backs.find((b) => b.includes("The heart.")) ?? "";
+      if (citedBack.includes("Section 3.2")) {
+        pass("finalize-footer-cite", `non-paste card renders its citation span "Section 3.2" ✓`);
+      } else {
+        fail("finalize-footer-cite", `non-paste card back missing its "Section 3.2" citation span`);
+      }
+
+      const pasteBack = backs.find((b) => b.includes("semipermeable membrane")) ?? "";
+      if (pasteBack.includes("⚑ flag") && !pasteBack.includes("Pasted text")) {
+        pass("finalize-footer-paste", `paste card suppresses "Pasted text", keeps flag link ✓`);
+      } else {
+        fail("finalize-footer-paste", `paste card footer wrong (must hide "Pasted text", keep flag): …${pasteBack.slice(-160)}`);
+      }
+    } catch (e) {
+      fail("finalize-footer", `could not read card backs from .apkg: ${e}`);
     }
   }
 
