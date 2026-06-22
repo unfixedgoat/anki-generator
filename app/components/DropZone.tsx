@@ -6,6 +6,8 @@ import { Upload, CheckCircle2, AlertCircle, X } from "lucide-react";
 import DensityToggle, { type Density } from "./DensityToggle";
 import StyleToggle, { type CardStyle } from "./StyleToggle";
 import UpgradeModal from "./UpgradeModal";
+import { chunkText } from "@/app/lib/chunkText";
+import type { RawCard } from "@/app/lib/visualEnricher";
 
 type DropState = "idle" | "hovering" | "extracting" | "loading" | "success" | "error";
 type InputType = "pdf" | "text";
@@ -23,25 +25,19 @@ interface Props {
   onGenerated?: (info: GenerationInfo) => void;
 }
 
-class RateLimitError extends Error {
-  constructor() { super("rate_limited"); this.name = "RateLimitError"; }
-}
+// Max chunk requests in flight at once. Each in-flight chunk is one Gemini call
+// and one server-side burst-limiter tick; 3 clears a 25-chunk Pro deck without
+// tripping the server's 50-req/60s burst fuse, even with one retry per chunk.
+const CONCURRENCY = 3;
 
-async function submitToApi(
-  formData: FormData,
-  signal: AbortSignal
-): Promise<{ blob: Blob; filename: string; cardCount: number }> {
-  const res = await fetch("/api/generate", { method: "POST", body: formData, signal });
-  if (res.status === 429) throw new RateLimitError();
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
-    throw new Error(data.error ?? `Error ${res.status}`);
-  }
-  const disposition = res.headers.get("Content-Disposition") ?? "";
-  const match = disposition.match(/filename="([^"]+)"/);
-  const filename = match?.[1] ?? "anki_deck.apkg";
-  const cardCount = parseInt(res.headers.get("X-Card-Count") ?? "0", 10);
-  return { blob: await res.blob(), filename, cardCount };
+// deckName is built client-side now: the per-chunk path's /api/finalize takes it
+// in the request body instead of deriving it server-side. Mirrors the old
+// /api/generate logic exactly — base = filename without .pdf (or "pasted_text"),
+// suffixed with a UTC minute stamp. /api/finalize re-sanitizes it for download.
+function buildDeckName(filename: string | null): string {
+  const base = filename?.replace(/\.pdf$/i, "") || "pasted_text";
+  const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+  return `${base} ${ts}`;
 }
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -72,6 +68,8 @@ export default function DropZone({ onGenerated }: Props) {
   const [rawText, setRawText] = useState("");
   const [loadingStep, setLoadingStep] = useState<1 | 2 | 3 | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [chunkProgress, setChunkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [partialNote, setPartialNote] = useState<string | null>(null);
   const [upgradeReason, setUpgradeReason] = useState<"limit" | "characters" | null>(null);
   const [identifier, setIdentifier] = useState("anonymous");
   const [isPro, setIsPro] = useState(false);
@@ -119,6 +117,7 @@ export default function DropZone({ onGenerated }: Props) {
     setState("idle");
     setFileName(null);
     setErrorMsg(null);
+    setPartialNote(null);
   }, []);
 
   const handleDensityChange = useCallback((val: Density) => {
@@ -134,42 +133,166 @@ export default function DropZone({ onGenerated }: Props) {
     abortRef.current?.abort();
   }, []);
 
-  const handleApiResult = useCallback(
-    async (formData: FormData, label: string, sourceText: string) => {
+  // Orchestrates the per-chunk pipeline: deck/start (the spend authority) →
+  // generate/chunk × N in capped concurrent batches → finalize. The client owns
+  // the chunk merge, so it also owns partial-failure surfacing.
+  const runChunkedGeneration = useCallback(
+    async (text: string, deckName: string, label: string) => {
       setFileName(label);
       setErrorMsg(null);
+      setPartialNote(null);
       setState("loading");
       const controller = new AbortController();
       abortRef.current = controller;
+      const { signal } = controller;
+
       try {
-        const { blob, filename, cardCount } = await submitToApi(formData, controller.signal);
-        clearProgressTimers();
+        // SAME 12k config as the proven server path — do not change.
+        const chunks = chunkText(text, 12000);
+
+        // 1. Pre-flight gate. deck/start is the authority on the char cap and the
+        // one-time quota decrement; the client pre-check above is only for speed.
+        const startRes = await fetch("/api/deck/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ totalChars: text.length, chunks: chunks.length }),
+          signal,
+        });
+        if (startRes.status === 400) {
+          const data = await startRes.json().catch(() => ({}));
+          if (data?.error === "characters") {
+            clearProgressTimers();
+            setLoadingStep(null);
+            setState("idle");
+            setFileName(null);
+            setUpgradeReason("characters");
+            return;
+          }
+          throw new Error("Couldn't start generation. Please try again.");
+        }
+        if (startRes.status === 429) {
+          clearProgressTimers();
+          setLoadingStep(null);
+          setState("idle");
+          setFileName(null);
+          setUpgradeReason("limit");
+          return;
+        }
+        if (!startRes.ok) throw new Error("Couldn't start generation. Please try again.");
+        const { token } = (await startRes.json()) as { token: string };
+
+        // 2. Fan out chunks in capped concurrent batches, preserving document order.
+        setLoadingStep(2);
+        setChunkProgress({ done: 0, total: chunks.length });
+
+        const cardsByIndex: (RawCard[] | null)[] = new Array(chunks.length).fill(null);
+        let processed = 0;
+        let burstSeen = false;
+
+        const runChunk = async (idx: number): Promise<void> => {
+          const res = await fetch("/api/generate/chunk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, chunk: chunks[idx], style: cardStyle, density, customPrompt }),
+            signal,
+          });
+          if (res.status === 429) {
+            const data = await res.json().catch(() => ({}));
+            // The client tripped its own fuse — shouldn't happen at CONCURRENCY 3
+            // on a legitimate deck. Flag it so the retry pass backs off first.
+            if (data?.error === "burst") { burstSeen = true; throw new Error("burst"); }
+            throw new Error("rate");
+          }
+          if (!res.ok) throw new Error(`chunk ${res.status}`);
+          const data = (await res.json()) as { cards: RawCard[] };
+          cardsByIndex[idx] = data.cards ?? [];
+        };
+
+        // One batched pass over a set of chunk indices; returns those still failed.
+        // Promise.allSettled means one bad chunk never nukes the deck.
+        const runPass = async (indices: number[], countProgress: boolean): Promise<number[]> => {
+          const failed: number[] = [];
+          for (let i = 0; i < indices.length; i += CONCURRENCY) {
+            if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+            const batch = indices.slice(i, i + CONCURRENCY);
+            const settled = await Promise.allSettled(batch.map((idx) => runChunk(idx)));
+            if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+            settled.forEach((r, b) => {
+              if (r.status === "rejected") failed.push(batch[b]);
+              if (countProgress) {
+                processed++;
+                setChunkProgress({ done: processed, total: chunks.length });
+              }
+            });
+          }
+          return failed;
+        };
+
+        // Primary pass over every chunk, then at most ONE retry pass for failures
+        // (a retry is another burst-counted call, so it's capped hard at one).
+        let failedIdx = await runPass(chunks.map((_, i) => i), true);
+        if (failedIdx.length > 0) {
+          if (burstSeen) await new Promise((r) => setTimeout(r, 2000));
+          failedIdx = await runPass(failedIdx, false);
+        }
+
+        const merged = cardsByIndex.filter((c): c is RawCard[] => c !== null).flat();
+        const failedCount = failedIdx.length;
+
+        if (merged.length === 0) {
+          // Nothing survived. All-failed mirrors the old 502; all-empty the 422.
+          throw new Error(
+            failedCount === chunks.length
+              ? "Card generation failed. Please try again."
+              : "No flashcards could be generated from this document."
+          );
+        }
+
+        // 3. Finalize: enrich + build the .apkg server-side, stream back the binary.
         setLoadingStep(3);
-        await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+        setChunkProgress(null);
+        const finalizeRes = await fetch("/api/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, deckName, cards: merged, style: cardStyle, density }),
+          signal,
+        });
+        if (!finalizeRes.ok) {
+          const data = await finalizeRes.json().catch(() => null);
+          const code = data?.error;
+          throw new Error(
+            code && code !== "token" && code !== "invalid"
+              ? String(code)
+              : "Card generation failed. Please try again."
+          );
+        }
+        const disposition = finalizeRes.headers.get("Content-Disposition") ?? "";
+        const match = disposition.match(/filename="([^"]+)"/);
+        const filename = match?.[1] ?? "anki_deck.apkg";
+        const cardCount = parseInt(finalizeRes.headers.get("X-Card-Count") ?? String(merged.length), 10);
+        const blob = await finalizeRes.blob();
+
+        clearProgressTimers();
         triggerDownload(blob, filename);
         setLoadingStep(null);
         setState("success");
         setFileName(filename);
-        onGenerated?.({
-          blob,
-          filename,
-          cardCount,
-          density: formData.get("density") as Density,
-          style: formData.get("style") as CardStyle,
-          text: sourceText,
-        });
+
+        // Partial-failure surfacing — non-blocking; the deck still downloaded.
+        if (failedCount > 0) {
+          setPartialNote(
+            `Generated ${cardCount} cards. ${failedCount} section${failedCount === 1 ? "" : "s"} failed — you can regenerate for the full deck.`
+          );
+        }
+
+        onGenerated?.({ blob, filename, cardCount, density, style: cardStyle, text });
       } catch (err) {
         clearProgressTimers();
         setLoadingStep(null);
+        setChunkProgress(null);
         if (err instanceof Error && err.name === "AbortError") {
           setState("idle");
           setFileName(null);
-          return;
-        }
-        if (err instanceof RateLimitError) {
-          setState("idle");
-          setFileName(null);
-          setUpgradeReason("limit");
           return;
         }
         setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
@@ -178,7 +301,7 @@ export default function DropZone({ onGenerated }: Props) {
         abortRef.current = null;
       }
     },
-    [onGenerated, clearProgressTimers]
+    [onGenerated, clearProgressTimers, cardStyle, density, customPrompt]
   );
 
   const processFile = useCallback(
@@ -243,15 +366,9 @@ export default function DropZone({ onGenerated }: Props) {
       }
 
       lastTextRef.current = text;
-      const formData = new FormData();
-      formData.append("text", text);
-      formData.append("density", density);
-      formData.append("style", cardStyle);
-      formData.append("customPrompt", customPrompt);
-      formData.append("filename", file.name);
-      await handleApiResult(formData, file.name, text);
+      await runChunkedGeneration(text, buildDeckName(file.name), file.name);
     },
-    [density, cardStyle, customPrompt, clientCharCap, handleApiResult, startProgressSteps, clearProgressTimers]
+    [clientCharCap, runChunkedGeneration, startProgressSteps, clearProgressTimers]
   );
 
   const processText = useCallback(async () => {
@@ -263,13 +380,8 @@ export default function DropZone({ onGenerated }: Props) {
     }
     lastTextRef.current = text;
     startProgressSteps();
-    const formData = new FormData();
-    formData.append("text", text);
-    formData.append("density", density);
-    formData.append("style", cardStyle);
-    formData.append("customPrompt", customPrompt);
-    await handleApiResult(formData, "pasted text", text);
-  }, [rawText, density, cardStyle, customPrompt, clientCharCap, handleApiResult, startProgressSteps]);
+    await runChunkedGeneration(text, buildDeckName(null), "pasted text");
+  }, [rawText, clientCharCap, runChunkedGeneration, startProgressSteps]);
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
@@ -315,6 +427,7 @@ export default function DropZone({ onGenerated }: Props) {
     setState("idle");
     setFileName(null);
     setErrorMsg(null);
+    setPartialNote(null);
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
@@ -357,7 +470,9 @@ export default function DropZone({ onGenerated }: Props) {
                   active ? "text-[#7a4f0d] font-medium" : done ? "text-slate-400" : "text-slate-300",
                 ].join(" ")}
               >
-                {label}
+                {n === 2 && chunkProgress && chunkProgress.total > 1
+                  ? `Generating cards ${chunkProgress.done}/${chunkProgress.total}`
+                  : label}
               </span>
             </div>
           );
@@ -368,7 +483,10 @@ export default function DropZone({ onGenerated }: Props) {
         <motion.button
           type="button"
           onClick={cancel}
-          className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
+          // pointer-events-auto: the busy-panel container sets pointer-events-none,
+          // so without this override Cancel is unclickable for the full run — which
+          // on the chunked path can be 2+ minutes on a large Pro doc.
+          className="absolute bottom-5 flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase pointer-events-auto"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           transition={{ type: "spring", stiffness: 400, damping: 20 }}
@@ -389,6 +507,11 @@ export default function DropZone({ onGenerated }: Props) {
         <p className="text-sm font-medium text-[#7a4f0d] font-serif">Deck downloaded</p>
         <p className="text-xs text-slate-400 max-w-xs truncate px-4">{fileName}</p>
       </div>
+      {partialNote && (
+        <p className="text-xs text-amber-600 max-w-xs px-4 leading-relaxed text-center">
+          {partialNote}
+        </p>
+      )}
       <button
         type="button"
         onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
