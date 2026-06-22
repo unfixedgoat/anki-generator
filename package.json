@@ -19,7 +19,9 @@
     "test:repairjson": "npx tsx scripts/test-repairjson.ts",
     "verify:caps": "npx ts-node --project scripts/tsconfig.json scripts/verify-caps.ts",
     "verify:deck-start": "npx tsx scripts/verify-deck-start.ts",
-    "verify:chunk-pipeline": "npx tsx scripts/verify-chunk-pipeline.ts"
+    "verify:chunk-pipeline": "npx tsx scripts/verify-chunk-pipeline.ts",
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.7",
@@ -38,6 +40,7 @@
     "stripe": "^22.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4",
     "@types/jszip": "^3.4.0",
     "@types/node": "^20",
