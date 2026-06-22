@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
   let style = "standard";
   let density = "high-yield";
   let customPrompt = "";
+  let isPaste = false;
   try {
     const body = (await req.json()) as {
       token?: unknown;
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
       style?: unknown;
       density?: unknown;
       customPrompt?: unknown;
+      isPaste?: unknown;
     };
     if (typeof body.token !== "string" || typeof body.chunk !== "string") {
       return NextResponse.json({ error: "invalid" }, { status: 400 });
@@ -36,6 +38,9 @@ export async function POST(req: NextRequest) {
     if (typeof body.style === "string") style = body.style;
     if (typeof body.density === "string") density = body.density;
     if (typeof body.customPrompt === "string") customPrompt = body.customPrompt;
+    // Deck-level paste-vs-PDF flag (omitted → false = PDF-mode citation). Gates
+    // only the citation instruction, so it rides in the body, not the token.
+    if (typeof body.isPaste === "boolean") isPaste = body.isPaste;
   } catch {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   let cards;
   try {
-    cards = await generateChunk(chunk, style, density, customPrompt);
+    cards = await generateChunk(chunk, style, density, customPrompt, isPaste);
   } catch (err) {
     console.error("[generate/chunk] Gemini error:", err);
     return NextResponse.json({ error: "Card generation failed. Please try again." }, { status: 502 });

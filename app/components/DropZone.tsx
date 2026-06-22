@@ -137,7 +137,10 @@ export default function DropZone({ onGenerated }: Props) {
   // generate/chunk × N in capped concurrent batches → finalize. The client owns
   // the chunk merge, so it also owns partial-failure surfacing.
   const runChunkedGeneration = useCallback(
-    async (text: string, deckName: string, label: string) => {
+    // isPaste: true for pasted text, false for PDFs — mirrors the old route's
+    // `isPaste = !filenameFromForm`. Threaded into every chunk body so the deck
+    // gets the "Pasted text" (flag-only) vs section-style citation instruction.
+    async (text: string, deckName: string, label: string, isPaste: boolean) => {
       setFileName(label);
       setErrorMsg(null);
       setPartialNote(null);
@@ -193,7 +196,7 @@ export default function DropZone({ onGenerated }: Props) {
           const res = await fetch("/api/generate/chunk", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token, chunk: chunks[idx], style: cardStyle, density, customPrompt }),
+            body: JSON.stringify({ token, chunk: chunks[idx], style: cardStyle, density, customPrompt, isPaste }),
             signal,
           });
           if (res.status === 429) {
@@ -366,7 +369,7 @@ export default function DropZone({ onGenerated }: Props) {
       }
 
       lastTextRef.current = text;
-      await runChunkedGeneration(text, buildDeckName(file.name), file.name);
+      await runChunkedGeneration(text, buildDeckName(file.name), file.name, false);
     },
     [clientCharCap, runChunkedGeneration, startProgressSteps, clearProgressTimers]
   );
@@ -380,7 +383,7 @@ export default function DropZone({ onGenerated }: Props) {
     }
     lastTextRef.current = text;
     startProgressSteps();
-    await runChunkedGeneration(text, buildDeckName(null), "pasted text");
+    await runChunkedGeneration(text, buildDeckName(null), "pasted text", true);
   }, [rawText, clientCharCap, runChunkedGeneration, startProgressSteps]);
 
   const onDragOver = useCallback(

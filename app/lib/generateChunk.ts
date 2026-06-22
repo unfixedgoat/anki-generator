@@ -242,7 +242,8 @@ export async function generateChunk(
   chunk: string,
   style: string = "standard",
   density: string = "high-yield",
-  customPrompt: string = ""
+  customPrompt: string = "",
+  isPaste: boolean = false
 ): Promise<RawCard[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
@@ -264,7 +265,6 @@ export async function generateChunk(
   const densityKey = rawDensity in DENSITY_MODIFIERS ? rawDensity : "high-yield";
   const densityModifier = DENSITY_MODIFIERS[densityKey];
 
-  const isPaste = false;
   const target = cardTarget(chunk, densityKey);
 
   const response = await ai.models.generateContent({
