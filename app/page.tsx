@@ -1,13 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
 import AccountChip from "@/app/components/AccountChip";
+import UpgradeModal from "@/app/components/UpgradeModal";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
+  // The parent owns the UpgradeModal for the Settings Recommender's regen path:
+  // SettingsRecommender has no modal of its own, so a regen quota-reject calls
+  // onUpgradeNeeded(reason) and we open the shared modal here. DropZone keeps its
+  // own instance unchanged. identifier mirrors DropZone's whoami lookup, which the
+  // modal needs for the Stripe checkout call.
+  const [upgradeReason, setUpgradeReason] = useState<"limit" | "characters" | null>(null);
+  const [identifier, setIdentifier] = useState("anonymous");
+  useEffect(() => {
+    fetch("/api/whoami")
+      .then((r) => r.json())
+      .then((d) => setIdentifier(d.identifier ?? "anonymous"))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen md:h-screen md:overflow-hidden">
@@ -35,7 +49,7 @@ export default function Home() {
         {/* Settings Recommender */}
         <div className="bg-[#f7f5f0] border-t md:border-t-0 border-slate-200 px-4 py-6 md:px-8 md:py-5 md:h-full md:overflow-y-auto">
           <div className="max-w-md mx-auto">
-            <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} />
+            <SettingsRecommender genInfo={genInfo} onNewGenInfo={setGenInfo} onUpgradeNeeded={setUpgradeReason} />
           </div>
         </div>
       </div>
@@ -82,6 +96,13 @@ export default function Home() {
           </motion.button>
         </motion.div>
       </footer>
+
+      <UpgradeModal
+        isOpen={upgradeReason !== null}
+        onClose={() => setUpgradeReason(null)}
+        reason={upgradeReason ?? "limit"}
+        identifier={identifier}
+      />
     </div>
   );
 }

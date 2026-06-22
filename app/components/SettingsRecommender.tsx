@@ -12,6 +12,7 @@ import {
   type Warning,
 } from "@/app/lib/settingsRecommender";
 import { type GenerationInfo } from "./DropZone";
+import { runChunkedGeneration, UpgradeNeededError } from "@/app/lib/runChunkedGeneration";
 
 const GOAL_OPTIONS: { value: GoalProfile; label: string; sub: string }[] = [
   { value: "cram",             label: "Cram",      sub: "Pass the exam — long-term retention not required" },
@@ -354,9 +355,13 @@ function PresetDisplay({
 interface Props {
   genInfo?: GenerationInfo | null;
   onNewGenInfo?: (info: GenerationInfo) => void;
+  // Threaded from the parent (Home), which owns the shared UpgradeModal + its
+  // identifier. SettingsRecommender has no modal of its own, so a regen
+  // quota-reject calls this to surface the upgrade prompt.
+  onUpgradeNeeded?: (reason: "limit" | "characters") => void;
 }
 
-export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Props) {
+export default function SettingsRecommender({ genInfo = null, onNewGenInfo, onUpgradeNeeded }: Props) {
   const [useFsrs, setUseFsrs]                    = useState(true);
   const [daysUntilExam, setDaysUntilExam]        = useState("");
   const [goal, setGoal]                          = useState<GoalProfile>("balanced");
@@ -364,6 +369,8 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   const [difficulty, setDifficulty]              = useState<DifficultyAssessment>("medium");
   const [preset, setPreset]                      = useState<AnkiPreset | null>(null);
   const [isRegenerating, setIsRegenerating]      = useState(false);
+  const [regenError, setRegenError]              = useState<string | null>(null);
+  const [regenPartial, setRegenPartial]          = useState<string | null>(null);
   const [inputsCollapsed, setInputsCollapsed]    = useState(false);
   const [manualCardCount, setManualCardCount]    = useState(() =>
     genInfo?.cardCount != null ? String(genInfo.cardCount) : ""
@@ -380,6 +387,19 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
     const from = liveCardCount ?? genInfo?.cardCount;
     if (from != null) setManualCardCount(String(from));
   }, [liveCardCount, genInfo?.cardCount]);
+
+  // A regen runs deck/start → chunk → finalize via the shared lib fn. Its signal
+  // is aborted on unmount so an in-flight regen can't setState on an unmounted
+  // component or orphan Gemini spend. No cancel button (parity: the old regen had
+  // none) — this is purely lifecycle hygiene for the required signal param.
+  const regenAbortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      regenAbortRef.current?.abort();
+    };
+  }, []);
 
   // move focus to output when preset first appears
   const presetOutputRef = useRef<HTMLDivElement>(null);
@@ -422,22 +442,29 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
   async function handleRegenerate(newDensity: string) {
     if (!activeInfo?.text) return;
     setIsRegenerating(true);
+    setRegenError(null);
+    setRegenPartial(null);
+    const controller = new AbortController();
+    regenAbortRef.current = controller;
     try {
-      const fd = new FormData();
-      fd.append("text", activeInfo.text);
-      fd.append("density", newDensity);
-      fd.append("style", activeInfo.style);
-      fd.append("filename", activeInfo.filename);
-      const res = await fetch("/api/generate", { method: "POST", body: fd });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `Error ${res.status}` }));
-        throw new Error(data.error ?? `Error ${res.status}`);
-      }
-      const blob      = await res.blob();
-      const newCount  = parseInt(res.headers.get("X-Card-Count") ?? "0", 10);
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match       = disposition.match(/filename="([^"]+)"/);
-      const filename    = match?.[1] ?? "anki_deck.apkg";
+      // Same fan-out the main flow uses (deck/start → chunk → finalize), via the
+      // shared lib fn. Parity with the old /api/generate regen: customPrompt ""
+      // (=== none; the lib type forbids literal undefined), isPaste false (the old
+      // route's !filename was always false here, so section citations are
+      // preserved — the paste quirk is intentionally NOT fixed in this commit).
+      // maxOutputTokens rises 8000 → 65536 automatically via generateChunk.
+      const { blob, filename, cardCount, failedCount } = await runChunkedGeneration(
+        {
+          text: activeInfo.text,
+          deckName: activeInfo.filename,
+          style: activeInfo.style,
+          density: newDensity,
+          customPrompt: "",
+          isPaste: false,
+        },
+        { signal: controller.signal } // no onProgress: the spinner is the only progress UI, as before
+      );
+      if (!mountedRef.current) return;
 
       // Trigger download for the regenerated deck
       const url = URL.createObjectURL(blob);
@@ -448,15 +475,22 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       URL.revokeObjectURL(url);
 
       const newInfo: GenerationInfo = {
-        blob, filename, cardCount: newCount,
+        blob, filename, cardCount,
         density: newDensity as GenerationInfo["density"],
         style: activeInfo.style,
         text: activeInfo.text,
       };
-      setLiveCardCount(newCount);
+      setLiveCardCount(cardCount);
       setLiveBlob(blob);
       setLiveGenInfo(newInfo);
       onNewGenInfo?.(newInfo);
+
+      // Partial-failure note — non-blocking; the deck still downloaded.
+      if (failedCount > 0) {
+        setRegenPartial(
+          `${failedCount} section${failedCount === 1 ? "" : "s"} failed — regenerate for the full deck.`
+        );
+      }
 
       // Recalculate preset with new count
       const days     = daysUntilExam ? parseInt(daysUntilExam, 10) : null;
@@ -464,7 +498,7 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       const intensity = densityToIntensity(newDensity);
       setPreset(
         computePreset({
-          deck_sizes: [newCount],
+          deck_sizes: [cardCount],
           days_until_exam: days,
           goal,
           daily_minutes_budget: mins,
@@ -475,9 +509,19 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
       );
       setCalcId((n) => n + 1);
     } catch (err) {
+      // Quota reject → the parent's shared UpgradeModal (no silent swallow).
+      if (err instanceof UpgradeNeededError) {
+        if (mountedRef.current) onUpgradeNeeded?.(err.reason);
+        return;
+      }
+      // Aborted on unmount — the component is gone; do not setState.
+      if (err instanceof Error && err.name === "AbortError") return;
+      // GenerationFailedError, finalize/network errors → minimal visible error.
       console.error("Regeneration failed:", err);
+      if (mountedRef.current) setRegenError("Regeneration failed. Please try again.");
     } finally {
-      setIsRegenerating(false);
+      if (mountedRef.current) setIsRegenerating(false);
+      regenAbortRef.current = null;
     }
   }
 
@@ -713,6 +757,13 @@ export default function SettingsRecommender({ genInfo = null, onNewGenInfo }: Pr
             onRegenerate={handleRegenerate}
             isRegenerating={isRegenerating}
           />
+        </div>
+      )}
+
+      {(regenError || regenPartial) && (
+        <div className="text-center space-y-0.5 mt-1" aria-live="polite">
+          {regenError && <p className="text-[11px] text-red-500">{regenError}</p>}
+          {regenPartial && <p className="text-[11px] text-amber-600">{regenPartial}</p>}
         </div>
       )}
     </div>
