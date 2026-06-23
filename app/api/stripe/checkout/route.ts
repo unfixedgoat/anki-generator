@@ -31,6 +31,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  // One-time $2 credit purchases are DISABLED. The live chunked generation gate
+  // (app/api/deck/start) does not read or decrement credit: entries, so a
+  // purchase grants nothing — the buyer is silently treated as free tier.
+  // Rejected server-side (not just by hiding the UI CTA) so a crafted request
+  // cannot create a charge. Re-enable only once deck/start enforces the credit
+  // tier. See memory: credit-tier-dead-on-chunked-path.
+  //
+  // Typed string[] (not a `plan === ...` literal check) on purpose: it must NOT
+  // narrow `plan`, or the retained one-time plumbing below (mode/payment branch)
+  // becomes a dead comparison (TS2367). Kept in VALID_PLANS so re-enabling is a
+  // one-line revert of this block.
+  const DISABLED_PLANS: string[] = ["one_time", "one_time_deck"];
+  if (DISABLED_PLANS.includes(plan)) {
+    return NextResponse.json(
+      { error: "One-time purchases are temporarily unavailable" },
+      { status: 400 }
+    );
+  }
+
   const { userId } = await auth();
   let customerEmail: string | undefined;
   if (userId) {

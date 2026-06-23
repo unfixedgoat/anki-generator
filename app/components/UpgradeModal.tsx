@@ -167,17 +167,6 @@ export default function UpgradeModal({ isOpen, onClose, reason, identifier }: Pr
                 </motion.button>
               </div>
 
-              <motion.button
-                type="button"
-                onClick={() => checkout("one_time")}
-                disabled={loading !== null}
-                whileHover={{ opacity: 0.7 }}
-                transition={{ duration: 0.15 }}
-                className="text-sm text-[#7a4f0d] underline underline-offset-2 disabled:cursor-default"
-              >
-                {loading === "one_time" ? "Loading…" : "Just need one deck? $2 one-time →"}
-              </motion.button>
-
               <p className="text-[11px] text-slate-400 leading-snug">
                 14-day money-back guarantee. Cancel subscriptions anytime.{" "}
                 <a href="/terms" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">
