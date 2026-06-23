@@ -4,7 +4,6 @@ const isPublic = createRouteMatcher([
   "/",
   "/privacy",
   "/terms",
-  "/api/generate(.*)",
   "/api/generate/chunk(.*)",
   "/api/deck/start(.*)",
   "/api/finalize(.*)",

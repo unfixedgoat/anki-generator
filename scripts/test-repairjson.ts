@@ -1,6 +1,6 @@
 // Tests for the extractJson pre-pass that recovers truncated LLM responses.
-// Replicates the pre-pass logic from app/api/generate/route.ts so the test
-// has no dependency on Next.js route imports.
+// Replicates the pre-pass logic from app/lib/generateChunk.ts (extractJson) so
+// the test has no dependency on Next.js route imports.
 
 interface RawCard {
   front: string;
