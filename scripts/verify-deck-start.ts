@@ -8,13 +8,20 @@
  *   3. free identifier, chunks 99               → 400 { error: "chunks" }
  *   4. the token from (2) passes verifyDeckToken, and fails it after one
  *      payload byte is flipped (HMAC tamper-evidence)
+ *   5. Pro identifier (seeded pro: key), totalChars 60000 → 200 cap=300000
+ *      pro=true (Pro tier honored); totalChars 300001 → 400 characters (300k
+ *      cap enforced). Ported from the deleted verify-caps T1; the credit tier
+ *      is intentionally NOT covered — deck/start has no credit branch
+ *      (see memory: credit-tier-dead-on-chunked-path).
  *
- * Requires dev server on localhost:3000 (npm run dev) and DECK_TOKEN_SECRET in
+ * Requires dev server on localhost:3000 (npm run dev), DECK_TOKEN_SECRET in
  * .env.local (the same secret the running server uses, so locally-verified
- * tokens match server-minted ones).
+ * tokens match server-minted ones), and UPSTASH_REDIS_REST_URL/_TOKEN (T5 seeds
+ * the pro: key the route reads).
  */
 import * as fs from "fs";
 import * as path from "path";
+import { Redis } from "@upstash/redis";
 import { verifyDeckToken } from "../app/lib/deckToken";
 
 const BASE_URL = "http://localhost:3000";
@@ -60,15 +67,55 @@ const RUN_ID = `deck-start-verify-${Date.now()}`;
 
 async function startDeck(
   totalChars: number,
-  chunks: number
+  chunks: number,
+  ip: string = RUN_ID
 ): Promise<{ status: number; body: Record<string, unknown> | null }> {
   const res = await fetch(`${BASE_URL}/api/deck/start`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-forwarded-for": RUN_ID },
+    headers: { "content-type": "application/json", "x-forwarded-for": ip },
     body: JSON.stringify({ totalChars, chunks }),
   });
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   return { status: res.status, body };
+}
+
+// T5 — Pro-tier cap, ported from the deleted verify-caps T1. Seeds pro:<id> (the
+// same key isPro() reads), then probes deck/start under that identifier. clientIp
+// parses leftmost in dev (see app/lib/clientIp.ts), so x-forwarded-for:<proIp>
+// resolves to <proIp> and the seeded entitlement matches. 60k is over the free
+// 50k cap but under Pro 300k: a 200 with pro=true/cap=300000 proves the Pro tier
+// was actually applied; a 400 characters there means the entitlement wasn't
+// honored (identifier mismatch / isPro false) — a hard FAIL, verify-caps'
+// semantics. The credit tier is NOT covered: deck/start has no credit branch.
+async function testProCap(): Promise<void> {
+  let redis: Redis;
+  try {
+    redis = Redis.fromEnv();
+  } catch (e) {
+    fail("T5", `cannot reach Redis to seed the pro: tier: ${e}`);
+    return;
+  }
+  const proIp = `deck-start-pro-${Date.now()}`;
+  await redis.set(`pro:${proIp}`, "1");
+  try {
+    const within = await startDeck(60_000, 4, proIp);
+    if (within.status === 200 && within.body?.pro === true && Number(within.body?.cap) === 300_000) {
+      pass("T5-within", "60,000 chars (Pro) → 200, pro=true, cap=300000 ✓");
+    } else if (within.status === 400 && within.body?.error === "characters") {
+      fail("T5-within", "60,000 chars (Pro) → 400 characters: seeded pro: entitlement NOT honored (identifier mismatch / isPro false)");
+    } else {
+      fail("T5-within", `60,000 chars (Pro) → expected 200 pro=true cap=300000, got ${within.status} ${JSON.stringify(within.body)}`);
+    }
+
+    const over = await startDeck(300_001, 4, proIp);
+    if (over.status === 400 && over.body?.error === "characters") {
+      pass("T5-over", "300,001 chars (Pro) → 400 characters: 300k cap enforced ✓");
+    } else {
+      fail("T5-over", `300,001 chars (Pro) → expected 400 characters, got ${over.status} ${JSON.stringify(over.body)}`);
+    }
+  } finally {
+    await redis.del(`pro:${proIp}`).catch(() => {});
+  }
 }
 
 async function main() {
@@ -140,6 +187,10 @@ async function main() {
       fail("T4-tamper", "tampered token still verified — HMAC check is not effective");
     }
   }
+
+  // 5. Pro tier → 300k cap honored on the live path (ported from verify-caps T1).
+  console.log("\n─── T5: Pro tier → 300k cap (60k accepted, 300,001 rejected) ───");
+  await testProCap();
 
   console.log(`\n─── Done: ${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`} ───\n`);
   process.exit(failures === 0 ? 0 : 1);
