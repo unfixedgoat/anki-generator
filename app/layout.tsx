@@ -31,7 +31,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "highyield.cards — AI Anki decks from any PDF",
+  title: "high yield cards",
   description:
     "Drop your syllabus. Get an Anki deck built around your exam date. Free AI-powered flashcard generator for students and serious learners.",
   metadataBase: new URL("https://highyield.cards"),
