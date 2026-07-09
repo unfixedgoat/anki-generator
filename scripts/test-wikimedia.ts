@@ -43,6 +43,16 @@ const MOCK_CASES: TestCase[] = [
     expectUrl: false,
     description: "REJECTED — 'flag' in filename",
   },
+  {
+    term: "afferent arteriole glomerulus blood flow",
+    expectUrl: true,
+    description: "FALLBACK — no article lead image, Commons file-search recovers a diagram",
+  },
+  {
+    term: "juxtaglomerular apparatus renin release",
+    expectUrl: false,
+    description: "FALLBACK REJECTED — Commons returns only a PDF scan (wrong MIME)",
+  },
 ];
 
 let passed = 0;
@@ -88,6 +98,19 @@ async function runLiveSmokeTest() {
   } else {
     console.log("failed");
     assert(false, `[${term}] live Wikipedia returned valid URL`, `got: ${url}`);
+  }
+
+  // Fallback smoke: a term with no article lead image that Commons file-search
+  // should still recover a real diagram for. Guards the fallback end-to-end.
+  const fbTerm = "afferent arteriole glomerulus blood flow";
+  process.stdout.write(`  Fetching "${fbTerm}" via Commons fallback... `);
+  const fbUrl = await fetchWikimediaUrl(fbTerm);
+  if (fbUrl !== null && fbUrl.startsWith("https://")) {
+    console.log("ok");
+    assert(true, `[${fbTerm}] Commons fallback returned valid URL: ${fbUrl}`);
+  } else {
+    console.log("failed");
+    assert(false, `[${fbTerm}] Commons fallback returned valid URL`, `got: ${fbUrl}`);
   }
 }
 
