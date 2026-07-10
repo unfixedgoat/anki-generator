@@ -35,6 +35,30 @@ const DENSITY_LABELS: Record<string, string> = {
 
 // ─── Small shared UI pieces ───────────────────────────────────────────────────
 
+// On-brand hover/focus tooltip. The "?" reveals the reasoning as a warm pill on
+// hover (desktop) or focus (keyboard/tap), instead of the old click-to-expand
+// that shoved text into the row and broke the layout.
+function HelpTip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group/tip align-middle">
+      <button
+        type="button"
+        aria-label="Why this value?"
+        className="flex-shrink-0 w-4 h-4 rounded-full bg-[#fdf1dc] text-[#c2871f] hover:bg-[#f7e6c4] text-[9px] font-bold leading-none flex items-center justify-center transition-colors cursor-help focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c97f1a] focus-visible:ring-offset-1"
+      >
+        ?
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[210px] -translate-x-1/2 rounded-lg bg-[#5c3d0a] px-2.5 py-1.5 text-left text-[11px] leading-snug text-[#fdf3e2] shadow-lg opacity-0 translate-y-1 transition-all duration-150 ease-out group-hover/tip:opacity-100 group-hover/tip:translate-y-0 group-focus-within/tip:opacity-100 group-focus-within/tip:translate-y-0"
+      >
+        {text}
+        <span className="absolute left-1/2 top-full -translate-x-1/2 border-[5px] border-transparent border-t-[#5c3d0a]" />
+      </span>
+    </span>
+  );
+}
+
 function Field({
   label,
   value,
@@ -44,32 +68,18 @@ function Field({
   value: string | number | boolean;
   rationale?: string;
 }) {
-  const [open, setOpen] = useState(false);
   const displayVal = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
   return (
-    <div className="flex items-start justify-between py-1 border-b border-slate-100 last:border-0 gap-4">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-[12px] text-slate-500 truncate">{label}</span>
-        {rationale && (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            aria-label={`${open ? "Hide" : "Show"} reasoning`}
-            className="flex-shrink-0 w-4 h-4 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 text-[9px] font-bold transition-colors leading-none flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 focus-visible:ring-offset-1"
-          >
-            ?
-          </button>
-        )}
+    <div className="flex items-start justify-between gap-3 py-1 border-b border-slate-100 last:border-0">
+      {/* Label keeps its natural width (no truncation); the value column wraps
+          instead, so long mono values like "1m 10m 60m 120m" never clip the label. */}
+      <div className="flex items-center gap-1.5 shrink-0 pt-px">
+        <span className="text-[12px] text-slate-500">{label}</span>
+        {rationale && <HelpTip text={rationale} />}
       </div>
-      <div className="text-right flex-shrink-0">
-        <span className="text-[12px] font-medium text-slate-700 font-mono">{displayVal}</span>
-        {open && rationale && (
-          <p className="text-[11px] text-slate-500 leading-relaxed mt-1 max-w-[220px] text-right animate-fade-up">
-            {rationale}
-          </p>
-        )}
-      </div>
+      <span className="text-[12px] font-medium text-slate-700 font-mono text-right min-w-0 break-words">
+        {displayVal}
+      </span>
     </div>
   );
 }
@@ -257,7 +267,7 @@ function PresetDisplay({
 
       {/* Rationale hint — below Daily Limits, adjacent to the fields it describes */}
       <p className="text-[10px] text-slate-400 text-center tracking-wide -mb-1">
-        Tap <span className="font-bold text-slate-500">?</span> next to any field for the reasoning.
+        Hover <span className="font-bold text-slate-500">?</span> next to any field for the reasoning.
       </p>
 
       {/* Advanced sections — revealed on demand */}
