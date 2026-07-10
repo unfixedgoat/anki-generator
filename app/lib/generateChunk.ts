@@ -228,6 +228,26 @@ function extractJson(raw: string): RawCard[] {
   return cards.map(c => ({ ...c, front: stripMarkdown(c.front), back: stripMarkdown(c.back) }));
 }
 
+// Pinned primary model for stable, prompt-tuned output; the always-current
+// flash alias is the deprecation safety net. Google sunsets Gemini models on a
+// rolling basis (that is what broke gemini-2.5-flash — intermittent 404s mid
+// rollout), and an alias can't itself 404 from being retired, so it is the
+// right failover target when the pinned model disappears.
+const PRIMARY_MODEL = "gemini-3.5-flash";
+const FALLBACK_MODEL = "gemini-flash-latest";
+
+// True only for the "model retired" 404 (NOT_FOUND / "no longer available").
+// Everything else — quota, 5xx, malformed output — must NOT match, so those
+// keep flowing to the caller's existing per-chunk retry instead of burning the
+// failover on an unrelated error.
+function isModelUnavailableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const statusProp = (err as { status?: unknown } | null)?.status;
+  const is404 = statusProp === 404 || /\b404\b/.test(msg);
+  const unavailable = /NOT_FOUND|no longer available|not found/i.test(msg);
+  return is404 && unavailable;
+}
+
 // Single-chunk generation. Style/density/custom injection below is
 // byte-identical to the live /api/generate path. maxOutputTokens is the one
 // deliberate change: 65536. style/density default to standard/high-yield and
@@ -267,23 +287,34 @@ export async function generateChunk(
 
   const target = cardTarget(chunk, densityKey);
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
-    config: {
-      systemInstruction: buildSystemInstruction(styleModifier, isPaste),
-      maxOutputTokens: 65536,
-      temperature: 0.4,
-    },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${chunk}`,
-          },
-        ],
+  // Same request on either model — only the model id changes on failover.
+  const runOn = (model: string) =>
+    ai.models.generateContent({
+      model,
+      config: {
+        systemInstruction: buildSystemInstruction(styleModifier, isPaste),
+        maxOutputTokens: 65536,
+        temperature: 0.4,
       },
-    ],
-  });
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Generate at least ${target} flashcards from the document below. The target is a minimum floor, not a ceiling — if the document contains more distinct testable concepts, definitions, rules, or facts, keep generating until you have covered them all. Stop only when you have genuinely exhausted the content, not to hit a round number.\n\nFor structured notes, study guides, or bullet-point outlines, treat each named concept, definition, rule, and bullet point as a separate card — do not consolidate multiple distinct facts onto one card.\n\nDENSITY: ${densityModifier}\n\n---\n\n${chunk}`,
+            },
+          ],
+        },
+      ],
+    });
+
+  let response: Awaited<ReturnType<typeof runOn>>;
+  try {
+    response = await runOn(PRIMARY_MODEL);
+  } catch (err) {
+    if (!isModelUnavailableError(err)) throw err;
+    console.warn(`[generateChunk] ${PRIMARY_MODEL} unavailable (deprecation 404) — failing over to ${FALLBACK_MODEL}`);
+    response = await runOn(FALLBACK_MODEL);
+  }
   return extractJson(response.text ?? "");
 }
