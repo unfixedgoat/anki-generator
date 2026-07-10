@@ -410,20 +410,25 @@ export default function DropZone({ onGenerated }: Props) {
           {partialNote}
         </p>
       )}
-      <button
-        type="button"
-        onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
-        className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 block text-center mt-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c97f1a] rounded"
-      >
-        Report a problem with this deck
-      </button>
-      <button
-        type="button"
-        onClick={reset}
-        className="absolute bottom-5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase"
-      >
-        Start over
-      </button>
+      {/* Footer actions flow together (not one flow + one absolute), so a
+          present partialNote can never grow the centered content into the
+          reset button — the crowding the old absolute layout produced. */}
+      <div className="flex flex-col items-center gap-2.5 mt-1">
+        <button
+          type="button"
+          onClick={() => window.open('https://tally.so/r/NpbkBW', '_blank')}
+          className="text-xs text-[#7a4f0d] underline underline-offset-2 opacity-60 hover:opacity-100 text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c97f1a] rounded"
+        >
+          Report a problem with this deck
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors tracking-widest uppercase focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c97f1a] rounded"
+        >
+          Start over
+        </button>
+      </div>
     </>
   );
 
