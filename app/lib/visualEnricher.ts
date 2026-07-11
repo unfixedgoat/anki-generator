@@ -23,9 +23,18 @@ function buildVisualUrl(type: "mermaid" | "quickchart", data: string): string {
 
 const MAX_IMAGE_BYTES = 400_000; // 400 KB — keeps base64 overhead within response limits
 
+// Wikimedia's User-Agent policy asks every client to identify itself with a
+// descriptive UA + contact; requests sent with a generic/absent UA (Node's
+// default) get aggressively rate-limited, which silently drops images when a
+// deck enriches several cards at once. Send a real one on every upstream call.
+// https://meta.wikimedia.org/wiki/User-Agent_policy
+const WIKIMEDIA_HEADERS = {
+  "User-Agent": "HighYieldCards/3.0 (https://highyield.cards; support@highyield.cards) card-image-enrichment",
+} as const;
+
 async function fetchAsDataUri(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { headers: WIKIMEDIA_HEADERS, signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const contentType = res.headers.get("content-type") ?? "image/png";
     if (!contentType.startsWith("image/")) return null;
@@ -58,6 +67,80 @@ function isAcceptableImageUrl(url: string): boolean {
   if (filename.endsWith(".gif")) return false;
   if (FILENAME_REJECT.some(w => filename.includes(w))) return false;
   return true;
+}
+
+// A JPEG lead image is almost always a photograph (e.g. the "Carbon" article's
+// graphite-and-diamond photo), whereas the diagrams we want are SVG — served by
+// the pageimages API as a rendered ".svg.png" — or native PNG illustrations.
+// We use this to keep photos off cards unless nothing better exists.
+function isPhotoUrl(url: string): boolean {
+  const filename = (url.split("/").pop() ?? "").toLowerCase();
+  return filename.endsWith(".jpg") || filename.endsWith(".jpeg");
+}
+
+// Fold the common British/American spelling split so a query word like
+// "hybridization" matches Wikipedia's article title "Orbital hybridisation".
+// Without this, the s/z difference silently discards the single most relevant
+// article and the relevance filter falls through to a generic one.
+function normalizeForMatch(word: string): string {
+  return word
+    .toLowerCase()
+    .replace(/isation\b/g, "ization")
+    .replace(/ise\b/g, "ize")
+    .replace(/yse\b/g, "yze");
+}
+
+// Two words "match" if one contains the other after spelling normalization, or
+// if they share a ≥6-char prefix (catches residual inflection/spelling drift
+// like "hybridization"/"hybridisation" that survives the fold above).
+function wordsMatch(a: string, b: string): boolean {
+  const na = normalizeForMatch(a);
+  const nb = normalizeForMatch(b);
+  if (!na || !nb) return false;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const min = Math.min(na.length, nb.length);
+  if (min < 6) return false;
+  let i = 0;
+  while (i < min && na[i] === nb[i]) i++;
+  return i >= 6;
+}
+
+function titleMatchesQueryWord(title: string, queryWord: string): boolean {
+  const titleWords = title.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return titleWords.some(tw => wordsMatch(tw, queryWord));
+}
+
+// A single matched word this long is discriminative enough to stand on its own
+// (e.g. "hybridization", "mitochondria", "glomerulus") — as opposed to a broad
+// subject noun like "carbon" or "neuron" that many off-topic articles share.
+const SPECIFIC_WORD_LEN = 10;
+
+interface TitleOverlap {
+  score: number; // sum of matched query-word lengths — a specificity proxy
+  count: number; // number of distinct query words matched
+  longest: number; // length of the longest matched query word
+}
+
+function scoreTitleOverlap(title: string, queryWords: string[]): TitleOverlap {
+  let score = 0;
+  let count = 0;
+  let longest = 0;
+  for (const qw of queryWords) {
+    if (titleMatchesQueryWord(title, qw)) {
+      score += qw.length;
+      count += 1;
+      if (qw.length > longest) longest = qw.length;
+    }
+  }
+  return { score, count, longest };
+}
+
+// A candidate is specific enough to accept even when it isn't the top match if
+// it shares two or more query words, or one long discriminative word. A lone
+// generic-subject match (just "carbon") is not — for those we prefer to fall
+// through to the Commons file-search rather than serve a loosely related article.
+function isSpecificMatch(o: TitleOverlap): boolean {
+  return o.count >= 2 || o.longest >= SPECIFIC_WORD_LEN;
 }
 
 const BIAS_TERMS = ["diagram", "pathway", "structure", "cycle"];
@@ -96,7 +179,7 @@ async function fetchArticlePageImage(
       `https://en.wikipedia.org/w/api.php?action=query&list=search` +
       `&srsearch=${encodeURIComponent(biasedTerm)}&srnamespace=0&srlimit=5` +
       `&format=json&origin=*`;
-    const searchRes = await fetcher(searchUrl, { signal: AbortSignal.timeout(8000) });
+    const searchRes = await fetcher(searchUrl, { headers: WIKIMEDIA_HEADERS, signal: AbortSignal.timeout(8000) });
     if (!searchRes.ok) return null;
     const searchData = await searchRes.json() as {
       query?: { search?: { title: string }[] };
@@ -104,25 +187,32 @@ async function fetchArticlePageImage(
     const results = searchData?.query?.search;
     if (!results?.length) return null;
 
-    // Filter out obvious non-academic hits (films, companies, disambiguation pages).
+    // Score each result by how specifically its title overlaps the query, then
+    // rank best-first. Matching is spelling-tolerant ("hybridization" matches
+    // "hybridisation"), and dropping films/companies/disambiguation pages first.
+    // Array.sort is stable, so equal scores keep Wikipedia's own search rank.
     const queryWords = searchTerm.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    const candidates = results.filter(r => {
-      const tl = r.title.toLowerCase();
-      if (SKIP_SUFFIXES.some(s => tl.endsWith(s.toLowerCase()))) return false;
-      // Keep the result if its title shares at least one significant word with the query.
-      return queryWords.length === 0 || queryWords.some(w => tl.includes(w));
-    });
+    const candidates = results
+      .map(r => ({ title: r.title, ...scoreTitleOverlap(r.title, queryWords) }))
+      .filter(c => {
+        const tl = c.title.toLowerCase();
+        if (SKIP_SUFFIXES.some(s => tl.endsWith(s.toLowerCase()))) return false;
+        return queryWords.length === 0 || c.score > 0;
+      })
+      .sort((a, b) => b.score - a.score);
 
     if (!candidates.length) return null;
+
+    const topScore = candidates[0].score;
 
     // Batch-fetch thumbnails for all candidates in a single API call.
     // Each title must be encoded separately; joining with a literal "|" keeps the
     // Wikipedia API pipe-separator intact (encodeURIComponent("|") would break it).
-    const titlesParam = candidates.map(r => encodeURIComponent(r.title)).join("|");
+    const titlesParam = candidates.map(c => encodeURIComponent(c.title)).join("|");
     const thumbUrl =
       `https://en.wikipedia.org/w/api.php?action=query&titles=${titlesParam}` +
       `&prop=pageimages&pithumbsize=800&pilicense=any&format=json&origin=*`;
-    const thumbRes = await fetcher(thumbUrl, { signal: AbortSignal.timeout(8000) });
+    const thumbRes = await fetcher(thumbUrl, { headers: WIKIMEDIA_HEADERS, signal: AbortSignal.timeout(8000) });
     if (!thumbRes.ok) return null;
     const thumbData = await thumbRes.json() as {
       query?: { pages?: Record<string, { title?: string; thumbnail?: { source: string } }> };
@@ -130,15 +220,29 @@ async function fetchArticlePageImage(
     const pages = thumbData?.query?.pages;
     if (!pages) return null;
 
-    // Return the first candidate (in original search-rank order) that has a thumbnail
-    // passing filename validation.
-    for (const candidate of candidates) {
-      const page = Object.values(pages).find(
-        p => p.title?.toLowerCase() === candidate.title.toLowerCase()
-      );
-      if (page?.thumbnail?.source && isAcceptableImageUrl(page.thumbnail.source)) {
-        return page.thumbnail.source;
-      }
+    const thumbFor = (title: string): string | undefined =>
+      Object.values(pages).find(p => p.title?.toLowerCase() === title.toLowerCase())
+        ?.thumbnail?.source;
+
+    // A candidate is worth returning only if it's the strongest match we found
+    // (the best article for the query) or independently specific. This stops the
+    // search from rank-walking past a strong match that happens to lack a lead
+    // image (e.g. "Orbital hybridisation") down to a weak generic one ("Allotropes
+    // of carbon") — in that case we return null and let the Commons file-search
+    // fallback try instead.
+    const eligible = candidates.filter(c => c.score === topScore || isSpecificMatch(c));
+
+    // Pass 1 — diagrams: first eligible candidate with a non-photographic thumbnail.
+    for (const c of eligible) {
+      const src = thumbFor(c.title);
+      if (src && isAcceptableImageUrl(src) && !isPhotoUrl(src)) return src;
+    }
+    // Pass 2 — photos as a last resort, but only for specific matches, never a
+    // lone generic one (keeps the graphite/diamond photo off an sp³ card).
+    for (const c of eligible) {
+      if (!isSpecificMatch(c)) continue;
+      const src = thumbFor(c.title);
+      if (src && isAcceptableImageUrl(src)) return src;
     }
     return null;
   } catch {
@@ -167,7 +271,7 @@ async function commonsFileQuery(
     `&gsrsearch=${encodeURIComponent(`filetype:bitmap|drawing ${term}`)}` +
     `&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|mime&iiurlwidth=800` +
     `&format=json&origin=*`;
-  const res = await fetcher(url, { signal: AbortSignal.timeout(8000) });
+  const res = await fetcher(url, { headers: WIKIMEDIA_HEADERS, signal: AbortSignal.timeout(8000) });
   if (!res.ok) return null;
   const data = (await res.json()) as {
     query?: {
