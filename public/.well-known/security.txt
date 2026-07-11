@@ -1,0 +1,5 @@
+# Security contact for highyield.cards — https://securitytxt.org (RFC 9116)
+Contact: mailto:hello@highyield.cards
+Expires: 2027-07-11T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://highyield.cards/.well-known/security.txt
