@@ -29,7 +29,7 @@ const MAX_IMAGE_BYTES = 400_000; // 400 KB — keeps base64 overhead within resp
 // deck enriches several cards at once. Send a real one on every upstream call.
 // https://meta.wikimedia.org/wiki/User-Agent_policy
 const WIKIMEDIA_HEADERS = {
-  "User-Agent": "HighYieldCards/3.0 (https://highyield.cards; support@highyield.cards) card-image-enrichment",
+  "User-Agent": "HighYieldCards/3.0 (https://highyield.cards; hello@highyield.cards) card-image-enrichment",
 } as const;
 
 async function fetchAsDataUri(url: string): Promise<string | null> {
