@@ -5,7 +5,10 @@ import { clientIp } from "@/app/lib/clientIp";
 import { verifyDeckToken } from "@/app/lib/deckToken";
 import { generateChunk } from "@/app/lib/generateChunk";
 
-export const maxDuration = 60;
+// 60s was too tight for the 65536 maxOutputTokens ceiling in generateChunk —
+// dense/large chunks were getting killed by the platform mid-generation
+// (504 Vercel Runtime Timeout), surfacing as "section failed" even on retry.
+export const maxDuration = 300;
 
 // Per-chunk generation. The deck quota was already decremented exactly once at
 // /api/deck/start, so this route NEVER touches the deck limiter — it only
