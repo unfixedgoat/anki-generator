@@ -31,6 +31,27 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sql.js"],
+
+  // sql.js ships every build variant it has ever supported in one `dist/`:
+  // asm.js fallbacks, browser builds, web-worker builds and a debug copy of
+  // each. `serverExternalPackages` copies the package in verbatim rather than
+  // bundling it, so all 19 MB landed in BOTH functions that require it — 38 MB
+  // of the deployment's function storage to run two files.
+  //
+  // Node resolves the package to dist/sql-wasm.js (its `main`), which loads
+  // dist/sql-wasm.wasm from the same directory. Nothing else here is reachable
+  // on the server. Excluding the rest leaves ~0.7 MB per function.
+  //
+  // Keep these globs in step with sql.js upgrades: a new entrypoint that does
+  // not match `sql-wasm.*` would be dropped and fail at runtime, not at build.
+  outputFileTracingExcludes: {
+    "*": [
+      "node_modules/sql.js/dist/sql-asm*",
+      "node_modules/sql.js/dist/worker.*",
+      "node_modules/sql.js/dist/*-debug.*",
+      "node_modules/sql.js/dist/*browser*",
+    ],
+  },
   // Already the Next.js default, but pinned explicitly so a future default
   // change can never ship client-readable source maps.
   productionBrowserSourceMaps: false,
