@@ -7,8 +7,8 @@ import type { NextConfig } from "next";
 // and clerk-js; tightening those needs a nonce-based setup.
 const cspReportOnly = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.highyield.cards https://*.clerk.accounts.dev https://challenges.cloudflare.com",
-  "connect-src 'self' https://clerk.highyield.cards https://*.clerk.accounts.dev",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.highyield.cards https://*.clerk.accounts.dev https://challenges.cloudflare.com https://argus-monitor.argus-monitor.workers.dev",
+  "connect-src 'self' https://clerk.highyield.cards https://*.clerk.accounts.dev https://argus-monitor.argus-monitor.workers.dev",
   "img-src 'self' data: blob: https://img.clerk.com",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",

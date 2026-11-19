@@ -94,6 +94,11 @@ export default function RootLayout({
             strategy="lazyOnload"
             id="pdfjs"
           />
+          <Script
+            src="https://argus-monitor.argus-monitor.workers.dev/widget.js"
+            data-key="pk_j4bXN4_VTxCV94tXgB-uqg"
+            strategy="afterInteractive"
+          />
           <Analytics />
         </ClerkProvider>
       </body>
