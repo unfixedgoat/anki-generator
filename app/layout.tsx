@@ -97,6 +97,7 @@ export default function RootLayout({
           <Script
             src="https://argus-monitor.argus-monitor.workers.dev/widget.js"
             data-key="pk_j4bXN4_VTxCV94tXgB-uqg"
+            data-inline="true"
             strategy="afterInteractive"
           />
           <Analytics />

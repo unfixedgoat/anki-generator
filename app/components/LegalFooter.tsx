@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ReportLink from "./ReportLink";
 
 // Bookends LegalHeader on the standalone /privacy and /terms pages, mirroring
 // the app's legal footer so a visitor who lands here from search still feels
@@ -25,6 +26,7 @@ export default function LegalFooter({ current }: { current: "privacy" | "terms" 
         ) : (
           <Link href="/terms" className={linkClass}>Terms &amp; Refunds</Link>
         )}
+        <ReportLink />
       </div>
     </footer>
   );

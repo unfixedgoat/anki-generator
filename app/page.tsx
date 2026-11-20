@@ -6,6 +6,7 @@ import DropZone, { type GenerationInfo } from "@/app/components/DropZone";
 import SettingsRecommender from "@/app/components/SettingsRecommender";
 import AccountChip from "@/app/components/AccountChip";
 import UpgradeModal from "@/app/components/UpgradeModal";
+import ReportLink from "@/app/components/ReportLink";
 
 export default function Home() {
   const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
@@ -76,6 +77,7 @@ export default function Home() {
           <a href="/terms" className="py-1 text-[#7a4f0d] underline-offset-2 hover:underline transition-colors">
             Terms &amp; Refunds
           </a>
+          <ReportLink />
         </div>
 
         {/* Feedback button — hidden on mobile, visible sm+, centered in the footer */}
