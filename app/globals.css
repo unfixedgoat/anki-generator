@@ -3,6 +3,13 @@
 :root {
   --background: #fffef9;
   --foreground: #1e293b;
+  /* The Argus "Report an issue" dialog takes the site's colours and type. */
+  --argus-accent: #7a4f0d;
+  --argus-bg: #fffef9;
+  --argus-fg: #1e293b;
+  --argus-dim: #475569;
+  --argus-border: #e2e8f0;
+  --argus-font: var(--font-geist-sans), system-ui, sans-serif;
 }
 
 @theme inline {
