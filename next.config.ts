@@ -17,14 +17,14 @@ const cspReportOnly = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'self' https://argus-sand-omega.vercel.app",
+  "frame-ancestors 'self' https://argus.arothe.dev https://argus-sand-omega.vercel.app",
 ].join("; ");
 
 // Enforced, unlike the policy above: framing is refused for every origin except this site and Argus (the
 // site monitor, whose site page shows the app live). frame-ancestors is ignored in a Report-Only policy,
 // so it needs its own enforced header. It replaces X-Frame-Options: SAMEORIGIN, which cannot name an
 // allowed origin; CSP frame-ancestors overrides X-Frame-Options in current browsers.
-const frameAncestors = "frame-ancestors 'self' https://argus-sand-omega.vercel.app";
+const frameAncestors = "frame-ancestors 'self' https://argus.arothe.dev https://argus-sand-omega.vercel.app";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options",    value: "nosniff" },
