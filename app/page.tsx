@@ -27,7 +27,7 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen md:h-screen md:overflow-hidden">
       {/* Top bar */}
-      <header className="flex-shrink-0 w-full px-6 py-5 border-b border-slate-200 bg-white grid grid-cols-[auto_1fr_auto] items-center">
+      <header className="flex-shrink-0 w-full px-6 py-5 border-b border-slate-200 bg-white grid grid-cols-[auto_1fr_auto] gap-3 items-center">
         <div className="flex items-center gap-2">
           <img src="/favicon.png" alt="highyield.cards" style={{height: '28px', width: 'auto'}} />
           <span className="font-serif text-sm font-medium text-[#1a2820]">highyield<span className="text-[#c97f1a]">.cards</span></span>
@@ -35,7 +35,10 @@ export default function Home() {
         <p className="hidden sm:block text-center text-sm text-slate-400 font-serif italic pointer-events-none">
           Drop your syllabus. Get an Anki deck built around your exam date.
         </p>
-        <AccountChip />
+        {/* Column 3 always: on phones the tagline is hidden, and the chip would otherwise stretch across column 2 into the logo. */}
+        <div className="col-start-3 justify-self-end">
+          <AccountChip />
+        </div>
       </header>
 
       {/* Body: stacked on mobile, side-by-side on desktop */}
