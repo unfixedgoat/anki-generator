@@ -216,7 +216,7 @@ function PresetDisplay({
             <span className="font-semibold text-slate-600">Starting defaults for new decks.</span>{" "}
             Once you have ~1,000 reviews, run{" "}
             <span className="font-medium">FSRS Optimize</span> and{" "}
-            <span className="font-medium">Compute Minimum Recommended Retention</span> in Deck Options; those use your personal data and will override this tool&apos;s retention suggestion.
+            <span className="font-medium">Compute Minimum Recommended Retention</span>{" "}in Deck Options; those use your personal data and will override this tool&apos;s retention suggestion.
           </p>
         </div>
       )}
